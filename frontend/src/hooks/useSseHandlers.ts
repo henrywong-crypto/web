@@ -79,6 +79,22 @@ function createPersistScheduler(): PersistScheduler {
   return { schedule, forceFlush, cancel };
 }
 
+interface StreamState {
+  taskId: string | null;
+  thinkingMsgId: string | null;
+  assistantMsgId: string | null;
+  toolIdToMsgId: Map<string, string>;
+}
+
+function getOrCreateStreamState(map: Map<string, StreamState>, conversationId: string): StreamState {
+  let state = map.get(conversationId);
+  if (!state) {
+    state = { taskId: null, thinkingMsgId: null, assistantMsgId: null, toolIdToMsgId: new Map() };
+    map.set(conversationId, state);
+  }
+  return state;
+}
+
 export function useSseHandlers(
   sseState: SseHandlerDeps,
   chatState: ChatStateResult,
@@ -97,14 +113,12 @@ export function useSseHandlers(
   } = sseState;
   const {
     viewConversationId,
-    runningConversationId,
-    setRunningConversationId,
-    setIsStreaming,
+    addRunningConversation,
+    removeRunningConversation,
     setSessionPendingQuestion,
     setTaskId,
     addMessage,
     removeMessage,
-    updateLastMessage,
     updateMessageById,
     getMessages,
     setMessages,
@@ -112,16 +126,10 @@ export function useSseHandlers(
     generateId,
   } = chatState;
 
-  const runningRef = useRef(runningConversationId);
-  runningRef.current = runningConversationId;
-
   const viewRef = useRef(viewConversationId);
   viewRef.current = viewConversationId;
 
-  const currentTaskIdRef = useRef<string | null>(null);
-  const toolIdToMsgId = useRef<Map<string, string>>(new Map());
-  const thinkingMsgId = useRef<string | null>(null);
-  const assistantMsgId = useRef<string | null>(null);
+  const streamStateRef = useRef<Map<string, StreamState>>(new Map());
 
   // Keep stable refs for conversations to avoid stale closures in the effect
   const conversationsRef = useRef(conversations);
@@ -139,13 +147,32 @@ export function useSseHandlers(
       handleEvent(event);
     }
 
+    function resolveConversationId(event: SseEvent): string | null {
+      // Tagged at source (sendQuery / reconnect wrapper)
+      if ("conversationId" in event && event.conversationId) {
+        return event.conversationId;
+      }
+      // Payload-level conversation_id for events that carry it
+      if (event.type === "task_created") return event.payload.conversation_id;
+      if (event.type === "done") return event.payload.conversation_id;
+      if (event.type === "ask_user_question") return event.payload.conversation_id;
+      if (event.type === "reconnecting") return event.payload.conversation_id;
+      return null;
+    }
+
     function handleEvent(event: SseEvent) {
-      const session = runningRef.current;
+      const conversationId = resolveConversationId(event);
+
+      // For events that require a session but don't have one, skip
+      // (shouldn't happen once tagging is in place)
+      const session = conversationId;
+
+      const ss = session ? getOrCreateStreamState(streamStateRef.current, session) : null;
 
       const sealThinking = () => {
-        if (!thinkingMsgId.current) return;
-        const msgId = thinkingMsgId.current;
-        thinkingMsgId.current = null;
+        if (!ss || !ss.thinkingMsgId) return;
+        const msgId = ss.thinkingMsgId;
+        ss.thinkingMsgId = null;
         const msgs = getMessages(session);
         const thinkMsg = msgs.find((m) => m.id === msgId);
         if (thinkMsg && !thinkMsg.content) {
@@ -156,27 +183,30 @@ export function useSseHandlers(
       switch (event.type) {
         case "task_created": {
           const { task_id, conversation_id } = event.payload;
-          currentTaskIdRef.current = task_id;
+          const state = getOrCreateStreamState(streamStateRef.current, conversation_id);
+          state.taskId = task_id;
           setTaskId(conversation_id, task_id);
           break;
         }
 
         case "session_start": {
           const { task_id } = event.payload;
-          currentTaskIdRef.current = task_id;
-          const conversationId = runningRef.current;
-          setTaskId(conversationId, task_id);
-          localStorage.setItem(
-            `chat_running_task_${vmId}`,
-            JSON.stringify({ task_id, running_session_id: conversationId }),
-          );
+          if (ss) ss.taskId = task_id;
+          if (session) {
+            setTaskId(session, task_id);
+            localStorage.setItem(
+              `chat_running_task_${vmId}`,
+              JSON.stringify({ task_id, running_session_id: session }),
+            );
+          }
           break;
         }
 
         case "init": {
+          if (!session || !ss) break;
           const id = generateId();
-          thinkingMsgId.current = id;
-          assistantMsgId.current = null;
+          ss.thinkingMsgId = id;
+          ss.assistantMsgId = null;
           addMessage(session, {
             id,
             type: "assistant",
@@ -184,22 +214,23 @@ export function useSseHandlers(
             timestamp: Date.now(),
             isThinking: true,
           });
-          if (currentTaskIdRef.current) {
-            const taskId = currentTaskIdRef.current;
+          if (ss.taskId) {
+            const taskId = ss.taskId;
             schedulerRef.current.schedule(() => getMessages(session), taskId);
           }
           break;
         }
 
         case "thinking_delta": {
+          if (!session || !ss) break;
           const { thinking } = event.payload;
-          if (thinkingMsgId.current) {
-            updateMessageById(session, thinkingMsgId.current, (m) => ({
+          if (ss.thinkingMsgId) {
+            updateMessageById(session, ss.thinkingMsgId, (m) => ({
               ...m,
               content: m.content + thinking,
             }));
-            if (currentTaskIdRef.current) {
-              const taskId = currentTaskIdRef.current;
+            if (ss.taskId) {
+              const taskId = ss.taskId;
               schedulerRef.current.schedule(() => getMessages(session), taskId);
             }
           }
@@ -207,11 +238,12 @@ export function useSseHandlers(
         }
 
         case "text_delta": {
+          if (!session || !ss) break;
           const { text } = event.payload;
           sealThinking();
-          if (!assistantMsgId.current) {
+          if (!ss.assistantMsgId) {
             const id = generateId();
-            assistantMsgId.current = id;
+            ss.assistantMsgId = id;
             addMessage(session, {
               id,
               type: "assistant",
@@ -219,25 +251,26 @@ export function useSseHandlers(
               timestamp: Date.now(),
             });
           } else {
-            updateMessageById(session, assistantMsgId.current, (m) => ({
+            updateMessageById(session, ss.assistantMsgId, (m) => ({
               ...m,
               content: m.content + text,
             }));
           }
-          if (currentTaskIdRef.current) {
-            const taskId = currentTaskIdRef.current;
+          if (ss.taskId) {
+            const taskId = ss.taskId;
             schedulerRef.current.schedule(() => getMessages(session), taskId);
           }
           break;
         }
 
         case "tool_start": {
+          if (!session || !ss) break;
           const { id: toolId, name, input } = event.payload;
           sealThinking();
-          assistantMsgId.current = null;
+          ss.assistantMsgId = null;
           if (name === "AskUserQuestion") break;
           const msgId = generateId();
-          toolIdToMsgId.current.set(toolId, msgId);
+          ss.toolIdToMsgId.set(toolId, msgId);
           addMessage(session, {
             id: msgId,
             type: "tool",
@@ -248,23 +281,24 @@ export function useSseHandlers(
             toolName: name,
             toolInput: input,
           });
-          if (currentTaskIdRef.current) {
-            const taskId = currentTaskIdRef.current;
+          if (ss.taskId) {
+            const taskId = ss.taskId;
             schedulerRef.current.schedule(() => getMessages(session), taskId);
           }
           break;
         }
 
         case "tool_result": {
+          if (!session || !ss) break;
           const { tool_use_id, content, is_error } = event.payload;
-          const msgId = toolIdToMsgId.current.get(tool_use_id);
+          const msgId = ss.toolIdToMsgId.get(tool_use_id);
           if (msgId) {
             updateMessageById(session, msgId, (m) => {
               if (m.type !== "tool") return m;
               return { ...m, toolResult: { content, isError: is_error } };
             });
-            if (currentTaskIdRef.current) {
-              const taskId = currentTaskIdRef.current;
+            if (ss.taskId) {
+              const taskId = ss.taskId;
               schedulerRef.current.schedule(() => getMessages(session), taskId);
             }
           }
@@ -273,8 +307,18 @@ export function useSseHandlers(
 
         case "ask_user_question": {
           const { request_id, task_id, conversation_id, questions } = event.payload;
-          sealThinking();
-          assistantMsgId.current = null;
+          const aqState = getOrCreateStreamState(streamStateRef.current, conversation_id);
+          // Seal thinking for this conversation
+          if (aqState.thinkingMsgId) {
+            const msgId = aqState.thinkingMsgId;
+            aqState.thinkingMsgId = null;
+            const msgs = getMessages(conversation_id);
+            const thinkMsg = msgs.find((m) => m.id === msgId);
+            if (thinkMsg && !thinkMsg.content) {
+              removeMessage(conversation_id, msgId);
+            }
+          }
+          aqState.assistantMsgId = null;
           setSessionPendingQuestion(conversation_id, { requestId: request_id, taskId: task_id, questions });
           storeQuestion(request_id, {
             conversationId: conversation_id,
@@ -287,15 +331,25 @@ export function useSseHandlers(
 
         case "done": {
           const { session_id, task_id, conversation_id } = event.payload;
-          schedulerRef.current.forceFlush(() => getMessages(session), task_id);
+          const doneState = getOrCreateStreamState(streamStateRef.current, conversation_id);
+          schedulerRef.current.forceFlush(() => getMessages(conversation_id), task_id);
           localStorage.removeItem(`chat_messages_task_${task_id}`);
-          currentTaskIdRef.current = null;
-          setRunningConversationId(null);
-          setIsStreaming(false);
+          doneState.taskId = null;
+          removeRunningConversation(conversation_id);
           setSessionPendingQuestion(conversation_id, null);
-          sealThinking();
-          assistantMsgId.current = null;
-          toolIdToMsgId.current.clear();
+          // Seal thinking
+          if (doneState.thinkingMsgId) {
+            const msgId = doneState.thinkingMsgId;
+            doneState.thinkingMsgId = null;
+            const msgs = getMessages(conversation_id);
+            const thinkMsg = msgs.find((m) => m.id === msgId);
+            if (thinkMsg && !thinkMsg.content) {
+              removeMessage(conversation_id, msgId);
+            }
+          }
+          doneState.assistantMsgId = null;
+          doneState.toolIdToMsgId.clear();
+          streamStateRef.current.delete(conversation_id);
 
           const storedQuestion = getQuestionsForConversation(conversation_id);
           if (storedQuestion) {
@@ -319,17 +373,17 @@ export function useSseHandlers(
 
         case "error_event": {
           const { message } = event.payload;
-          if (currentTaskIdRef.current) {
-            schedulerRef.current.forceFlush(() => getMessages(session), currentTaskIdRef.current);
-            localStorage.removeItem(`chat_messages_task_${currentTaskIdRef.current}`);
-            currentTaskIdRef.current = null;
+          if (ss && ss.taskId) {
+            schedulerRef.current.forceFlush(() => getMessages(session), ss.taskId);
+            localStorage.removeItem(`chat_messages_task_${ss.taskId}`);
+            ss.taskId = null;
           }
-          setRunningConversationId(null);
-          setIsStreaming(false);
-          setSessionPendingQuestion(session, null);
-          thinkingMsgId.current = null;
-          assistantMsgId.current = null;
-          toolIdToMsgId.current.clear();
+          if (session) {
+            removeRunningConversation(session);
+            setSessionPendingQuestion(session, null);
+            streamStateRef.current.delete(session);
+          }
+          // If no session tagged, remove all running (fallback for untagged errors)
           addMessage(session, {
             id: generateId(),
             type: "error",
@@ -341,11 +395,11 @@ export function useSseHandlers(
 
         case "reconnecting": {
           const { task_id, conversation_id } = event.payload;
-          if (currentTaskIdRef.current === task_id) break;
-          currentTaskIdRef.current = task_id;
+          const rcState = getOrCreateStreamState(streamStateRef.current, conversation_id);
+          if (rcState.taskId === task_id) break;
+          rcState.taskId = task_id;
           setTaskId(conversation_id, task_id);
-          setRunningConversationId(conversation_id);
-          setIsStreaming(true);
+          addRunningConversation(conversation_id);
           setViewConversationId(conversation_id);
 
           let inProgressMessages: ChatMessage[] = [];

@@ -12,7 +12,7 @@ import ClaudeStatus from "./ClaudeStatus";
 interface ChatInterfaceProps {
   selectedConversation: Conversation | null;
   newChatKey?: number;
-  onRunningConversationChange?: (conversationId: string | null) => void;
+  onRunningConversationChange?: (runningIds: Set<string>) => void;
   onConversationCreated?: (conversation: Conversation) => void;
 }
 
@@ -34,10 +34,10 @@ export default function ChatInterface({ selectedConversation, newChatKey = 0, on
   const {
     viewConversationId,
     setViewConversationId,
-    runningConversationId,
-    setRunningConversationId,
-    isStreaming,
-    setIsStreaming,
+    runningConversationIds,
+    addRunningConversation,
+    removeRunningConversation,
+    isConversationRunning,
     getSessionPendingQuestion,
     setSessionPendingQuestion,
     getTaskId,
@@ -118,8 +118,8 @@ export default function ChatInterface({ selectedConversation, newChatKey = 0, on
   const onRunningConversationChangeRef = useRef(onRunningConversationChange);
   onRunningConversationChangeRef.current = onRunningConversationChange;
   useEffect(() => {
-    onRunningConversationChangeRef.current?.(runningConversationId);
-  }, [runningConversationId]);
+    onRunningConversationChangeRef.current?.(runningConversationIds);
+  }, [runningConversationIds]);
 
   const handleSend = useCallback((text: string) => {
     let effectiveConversationId = viewConversationId;
@@ -140,15 +140,15 @@ export default function ChatInterface({ selectedConversation, newChatKey = 0, on
       content: text,
       timestamp: Date.now(),
     });
-    setRunningConversationId(effectiveConversationId);
-    setIsStreaming(true);
+    addRunningConversation(effectiveConversationId);
 
     sseCtx.sendQuery(text, effectiveConversationId, sessionId);
-  }, [viewConversationId, conversations, generateId, addMessage, setRunningConversationId, setIsStreaming, setViewConversationId, onConversationCreated, sseCtx]);
+  }, [viewConversationId, conversations, generateId, addMessage, addRunningConversation, setViewConversationId, onConversationCreated, sseCtx]);
 
   const handleStop = useCallback(() => {
-    sseCtx.sendStop(getTaskId(runningConversationId) ?? "").catch(console.error);
-  }, [sseCtx, getTaskId, runningConversationId]);
+    if (!viewConversationId) return;
+    sseCtx.sendStop(getTaskId(viewConversationId) ?? "").catch(console.error);
+  }, [sseCtx, getTaskId, viewConversationId]);
 
   const handleAnswerQuestion = useCallback(
     async (requestId: string, answers: Record<string, string>) => {
@@ -172,8 +172,7 @@ export default function ChatInterface({ selectedConversation, newChatKey = 0, on
 
   const messages = getMessages(viewConversationId);
   const pendingQuestion = getSessionPendingQuestion(viewConversationId);
-  const isCurrentRunning = isStreaming && runningConversationId === viewConversationId;
-  const isOtherRunning = isStreaming && runningConversationId !== viewConversationId;
+  const isCurrentRunning = viewConversationId !== null && isConversationRunning(viewConversationId);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -192,7 +191,6 @@ export default function ChatInterface({ selectedConversation, newChatKey = 0, on
       ) : (
         <ChatComposer
           isLoading={isCurrentRunning}
-          isOtherRunning={isOtherRunning}
           onSend={handleSend}
           onStop={handleStop}
           focusKey={composerFocusKey}

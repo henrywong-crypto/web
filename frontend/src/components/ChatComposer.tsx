@@ -4,7 +4,6 @@ import { useSse } from "../contexts/SseContext";
 
 interface ChatComposerProps {
   isLoading: boolean;
-  isOtherRunning?: boolean;
   onSend: (text: string) => void;
   onStop: () => void;
   focusKey?: number;
@@ -35,7 +34,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
   { name: "/vim",         description: "Enter vim mode" },
 ];
 
-export default function ChatComposer({ isLoading, isOtherRunning, onSend, onStop, focusKey }: ChatComposerProps) {
+export default function ChatComposer({ isLoading, onSend, onStop, focusKey }: ChatComposerProps) {
   const { uploadAction, csrfToken, uploadDir } = useSse();
 
   const [input, setInput] = useState("");
@@ -60,7 +59,7 @@ export default function ChatComposer({ isLoading, isOtherRunning, onSend, onStop
   }, [isLoading]);
 
   const busy = isLoading || uploading;
-  const blocked = busy || (isOtherRunning ?? false);
+  const blocked = busy;
 
   const filteredCommands = input.startsWith("/")
     ? SLASH_COMMANDS.filter((cmd) => cmd.name.startsWith(input.split(" ")[0].toLowerCase()))

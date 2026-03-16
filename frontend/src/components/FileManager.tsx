@@ -18,7 +18,7 @@ function parentPath(path: string, rootPath: string): string {
 }
 
 export default function FileManager() {
-  const { vmId, uploadDir, uploadAction, csrfToken } = useSse();
+  const { uploadDir, uploadAction, csrfToken } = useSse();
   const [currentPath, setCurrentPath] = useState(uploadDir);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,7 +30,7 @@ export default function FileManager() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/sessions/${vmId}/ls?path=${encodeURIComponent(path)}`, { signal });
+      const res = await fetch(`/ls?path=${encodeURIComponent(path)}`, { signal });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
       setCurrentPath(path);
@@ -41,7 +41,7 @@ export default function FileManager() {
     } finally {
       setLoading(false);
     }
-  }, [vmId]);
+  }, []);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -156,7 +156,7 @@ export default function FileManager() {
                   onClick={() => loadDir(entryPath)}
                   action={
                     <a
-                      href={`/sessions/${vmId}/download?path=${encodeURIComponent(entryPath)}`}
+                      href={`/download?path=${encodeURIComponent(entryPath)}`}
                       target="_blank"
                       rel="noreferrer"
                       title="Download as zip"
@@ -173,7 +173,7 @@ export default function FileManager() {
                   icon={<File className="h-3.5 w-3.5 text-muted-foreground" />}
                   name={entry.name}
                   nameClass="text-foreground"
-                  onClick={() => window.open(`/sessions/${vmId}/download?path=${encodeURIComponent(entryPath)}`, "_blank")}
+                  onClick={() => window.open(`/download?path=${encodeURIComponent(entryPath)}`, "_blank")}
                   action={<span className="ml-1 text-[10px] text-muted-foreground opacity-50">{formatSize(entry.size)}</span>}
                 />
               );

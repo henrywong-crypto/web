@@ -122,10 +122,14 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       payload: { task_id: taskId, conversation_id: conversationId },
     });
 
+    const taggedPush = (event: SseEvent): void => {
+      pushEvent({ ...event, conversationId } as SseEvent);
+    };
+
     const url = `/chat-stream/${encodeURIComponent(taskId)}?conversation_id=${encodeURIComponent(conversationId)}`;
     const es = new EventSource(url);
     esRef.current = es;
-    attachEventSourceListeners(es, pushEvent, vmId);
+    attachEventSourceListeners(es, taggedPush, vmId);
 
     return () => {
       es.close();
@@ -139,6 +143,9 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
     sessionId?: string,
     workDir?: string,
   ) => {
+    const taggedPush = (event: SseEvent): void => {
+      pushEvent({ ...event, conversationId } as SseEvent);
+    };
     const executeStream = async () => {
       const res = await fetch("/chat", {
         method: "POST",
@@ -155,10 +162,10 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
         throw new Error(msg || `HTTP ${res.status}`);
       }
       refreshCsrfToken(res);
-      await readFetchSseStream(res, pushEvent, vmId);
+      await readFetchSseStream(res, taggedPush, vmId);
     };
     executeStream().catch((err: unknown) => {
-      pushEvent({ type: "error_event", payload: { message: String(err) } });
+      taggedPush({ type: "error_event", payload: { message: String(err) } });
     });
   }, [vmId, pushEvent, refreshCsrfToken]);
 

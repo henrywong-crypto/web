@@ -5,7 +5,7 @@ import type { Conversation } from "../types";
 interface SidebarProps {
   conversations: Conversation[];
   viewConversationId: string | null;
-  runningConversationId: string | null;
+  runningConversationIds: Set<string>;
   onSelectConversation: (conversation: Conversation) => void;
   onNewChat: () => void;
   onDeleteConversation: (conversation: Conversation) => void;
@@ -15,7 +15,7 @@ interface SidebarProps {
 export default function Sidebar({
   conversations,
   viewConversationId,
-  runningConversationId,
+  runningConversationIds,
   onSelectConversation,
   onNewChat,
   onDeleteConversation,
@@ -45,7 +45,7 @@ export default function Sidebar({
               key={conversation.conversationId}
               conversation={conversation}
               isActive={conversation.conversationId === viewConversationId}
-              isRunning={conversation.conversationId === runningConversationId}
+              isRunning={runningConversationIds.has(conversation.conversationId)}
               onSelect={() => onSelectConversation(conversation)}
               onDelete={() => onDeleteConversation(conversation)}
             />

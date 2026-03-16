@@ -9,10 +9,10 @@ export interface ChatStateResult {
   messagesBySession: React.MutableRefObject<Map<string, ChatMessage[]>>;
   viewConversationId: string | null;
   setViewConversationId: (id: string | null) => void;
-  runningConversationId: string | null;
-  setRunningConversationId: (id: string | null) => void;
-  isStreaming: boolean;
-  setIsStreaming: (v: boolean) => void;
+  runningConversationIds: Set<string>;
+  addRunningConversation: (id: string) => void;
+  removeRunningConversation: (id: string) => void;
+  isConversationRunning: (id: string) => boolean;
   getSessionPendingQuestion: (conversationId: string | null) => PendingQuestion | null;
   setSessionPendingQuestion: (conversationId: string | null, q: PendingQuestion | null) => void;
   getTaskId: (conversationId: string | null) => string | undefined;
@@ -33,11 +33,25 @@ export function useChatState(): ChatStateResult {
   const pendingQuestionsBySession = useRef<Map<string, PendingQuestion>>(new Map());
   const taskIdBySession = useRef<Map<string, string>>(new Map());
   const [viewConversationId, setViewConversationId] = useState<string | null>(null);
-  const [runningConversationId, setRunningConversationId] = useState<string | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
+  const runningConversationIdsRef = useRef<Set<string>>(new Set());
+  const [runningConversationIds, setRunningConversationIds] = useState<Set<string>>(new Set());
   const [renderTick, setRenderTick] = useState(0);
 
   const bumpRender = useCallback(() => setRenderTick((t) => t + 1), []);
+
+  const addRunningConversation = useCallback((id: string) => {
+    runningConversationIdsRef.current.add(id);
+    setRunningConversationIds(new Set(runningConversationIdsRef.current));
+  }, []);
+
+  const removeRunningConversation = useCallback((id: string) => {
+    runningConversationIdsRef.current.delete(id);
+    setRunningConversationIds(new Set(runningConversationIdsRef.current));
+  }, []);
+
+  const isConversationRunning = useCallback((id: string): boolean => {
+    return runningConversationIdsRef.current.has(id);
+  }, []);
 
   const getTaskId = useCallback((conversationId: string | null): string | undefined => {
     if (conversationId === null) return undefined;
@@ -118,10 +132,10 @@ export function useChatState(): ChatStateResult {
     messagesBySession,
     viewConversationId,
     setViewConversationId,
-    runningConversationId,
-    setRunningConversationId,
-    isStreaming,
-    setIsStreaming,
+    runningConversationIds,
+    addRunningConversation,
+    removeRunningConversation,
+    isConversationRunning,
     getSessionPendingQuestion,
     setSessionPendingQuestion,
     getTaskId,

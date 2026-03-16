@@ -40,7 +40,7 @@ function AppContent() {
   const { hasUserRootfs, csrfToken, conversations, createConversation, deleteConversation, deleteSession, syncConversationsFromHistory } = useSse();
   const [activeTab, setActiveTab] = useState<ViewTab>("chat");
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
-  const [runningConversationId, setRunningConversationId] = useState<string | null>(null);
+  const [runningConversationIds, setRunningConversationIds] = useState<Set<string>>(new Set());
   const [newChatKey, setNewChatKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -95,7 +95,7 @@ function AppContent() {
         <Sidebar
           conversations={conversations}
           viewConversationId={selectedConversation?.conversationId ?? null}
-          runningConversationId={runningConversationId}
+          runningConversationIds={runningConversationIds}
           onSelectConversation={setSelectedConversation}
           onNewChat={handleNewChat}
           onDeleteConversation={handleDeleteConversation}
@@ -108,7 +108,7 @@ function AppContent() {
           <ChatInterface
             selectedConversation={selectedConversation}
             newChatKey={newChatKey}
-            onRunningConversationChange={setRunningConversationId}
+            onRunningConversationChange={setRunningConversationIds}
             onConversationCreated={setSelectedConversation}
           />
         )}
