@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Conversation } from "../types";
 import { useSse } from "../contexts/SseContext";
 import { useChatState } from "../hooks/useChatState";
@@ -89,7 +89,9 @@ export default function ChatInterface({ selectedConversation, newChatKey = 0, on
     }
   }, [loadTranscript, getMessages, setMessages]);
 
-  useEffect(() => {
+  // useLayoutEffect so viewConversationId is set synchronously after render,
+  // before the browser can dispatch user input (avoids race with handleSend).
+  useLayoutEffect(() => {
     if (!selectedConversation) {
       setViewConversationId(null);
       setComposerFocusKey((k) => k + 1);
