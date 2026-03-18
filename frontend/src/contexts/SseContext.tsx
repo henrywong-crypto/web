@@ -36,6 +36,7 @@ interface SseContextValue {
     sessionId?: string,
     workDir?: string,
   ) => void;
+  abortQuery: () => void;
   sendStop: (taskId: string) => Promise<void>;
   answerQuestion: (
     taskId: string,
@@ -119,6 +120,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
     useQuestionStorage();
 
   const esRef = useRef<EventSource | null>(null);
+  const queryAbortRef = useRef<AbortController | null>(null);
 
   // On mount: check for in-progress task and open reconnect stream
   useEffect(() => {
@@ -175,6 +177,8 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       const taggedPush = (event: SseEvent): void => {
         pushEvent({ ...event, conversationId } as SseEvent);
       };
+      const abortController = new AbortController();
+      queryAbortRef.current = abortController;
       const executeStream = async () => {
         const res = await fetch("/chat", {
           method: "POST",
@@ -188,6 +192,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
             session_id: sessionId ?? null,
             work_dir: workDir ?? null,
           }),
+          signal: abortController.signal,
         });
         if (!res.ok) {
           const msg = await res.text();
@@ -197,11 +202,21 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
         await readFetchSseStream(res, taggedPush, vmId);
       };
       executeStream().catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === "AbortError") return;
         taggedPush({ type: "error_event", payload: { message: String(err) } });
+      }).finally(() => {
+        if (queryAbortRef.current === abortController) {
+          queryAbortRef.current = null;
+        }
       });
     },
     [vmId, pushEvent, refreshCsrfToken],
   );
+
+  const abortQuery = useCallback(() => {
+    queryAbortRef.current?.abort();
+    queryAbortRef.current = null;
+  }, []);
 
   const post = useCallback(
     async (path: string, body: Record<string, unknown>) => {
@@ -304,6 +319,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
         deleteConversation,
         syncConversationsFromHistory,
         sendQuery,
+        abortQuery,
         sendStop,
         answerQuestion,
         loadHistory,

@@ -81,17 +81,20 @@ test.describe("streaming", () => {
     await expect(page.getByText("Done.")).toBeVisible();
   });
 
-  test("UF-09 clicking Stop sends a stop request to the server", async ({ page }) => {
+  test("UF-09 clicking Stop aborts the in-flight request when task_id is not yet available", async ({ page }) => {
     const ctrl = await setupApp(page, { sessions: [] });
 
     // Send a message so the streaming state activates (no SSE events yet)
     await sendMessage(page, "Long task");
 
-    // The stop button is in the ClaudeStatus bar while streaming
+    // The stop button is in the composer while streaming
     await expect(page.getByRole("status")).toBeVisible();
     await page.getByTitle("Stop (Esc)").first().click();
 
-    expect(ctrl.stopRequested()).toBe(true);
+    // No task_id available yet, so no /chat-stop POST — instead the fetch is aborted
+    // and the running state is cleared (composer re-enabled)
+    expect(ctrl.stopRequested()).toBe(false);
+    await expect(page.locator('textarea[placeholder="Message Claude…"]')).toBeEnabled();
   });
 
   test("UF-10 ask user question panel shown and answer submitted", async ({ page }) => {

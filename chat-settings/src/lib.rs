@@ -12,6 +12,7 @@ const CHANNEL_WAIT_TIMEOUT_SECS: u64 = 30;
 
 pub struct VmSettings {
     pub has_api_key: bool,
+    pub uses_bedrock: bool,
 }
 
 pub fn build_api_key_settings_json(
@@ -69,12 +70,16 @@ pub async fn get_vm_settings(
 fn parse_vm_settings(stdout: &str) -> Result<VmSettings> {
     let settings: serde_json::Value =
         serde_json::from_str(stdout).context("failed to parse settings JSON")?;
+    let env = settings.get("env");
     Ok(VmSettings {
-        has_api_key: settings
-            .get("env")
+        has_api_key: env
             .and_then(|v| v.get("ANTHROPIC_AUTH_TOKEN"))
             .and_then(|v| v.as_str())
             .is_some_and(|s| !s.is_empty()),
+        uses_bedrock: env
+            .and_then(|v| v.get("CLAUDE_CODE_USE_BEDROCK"))
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| s == "1" || s.eq_ignore_ascii_case("true")),
     })
 }
 

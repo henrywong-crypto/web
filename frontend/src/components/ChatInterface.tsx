@@ -182,8 +182,15 @@ export default function ChatInterface({
 
   const handleStop = useCallback(() => {
     if (!viewConversationId) return;
-    sseCtx.sendStop(getTaskId(viewConversationId) ?? "").catch(console.error);
-  }, [sseCtx, getTaskId, viewConversationId]);
+    const taskId = getTaskId(viewConversationId);
+    if (taskId) {
+      sseCtx.sendStop(taskId).catch(console.error);
+    } else {
+      // Task ID not yet received — abort the in-flight fetch and clear running state
+      sseCtx.abortQuery();
+      removeRunningConversation(viewConversationId);
+    }
+  }, [sseCtx, getTaskId, removeRunningConversation, viewConversationId]);
 
   const handleAnswerQuestion = useCallback(
     async (requestId: string, answers: Record<string, string>) => {

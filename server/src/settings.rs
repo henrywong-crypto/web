@@ -38,7 +38,7 @@ pub(crate) async fn get_settings_handler(
     )
     .await?;
     Ok(Json(SettingsResponse {
-        uses_bedrock: false,
+        uses_bedrock: vm_settings.uses_bedrock,
         has_api_key: vm_settings.has_api_key,
         base_url: state.config.anthropic_base_url.clone(),
     })
