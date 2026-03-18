@@ -141,12 +141,11 @@ select,
   border: 1px solid hsl(var(--border));
   border-radius: 0.5rem;
   overflow-x: auto;
-  font-size: 0.8125rem;
-  line-height: 1.7;
+  font-size: 0.875rem;  line-height: 1.7;
 }
 
 .prose code {
-  font-size: 0.875em;
+  font-size: 0.9375em;
 }
 
 .prose code::before,
@@ -159,14 +158,14 @@ select,
   background-color: hsl(var(--muted));
   padding: 0.15em 0.4em;
   border-radius: 0.25rem;
-  font-size: 0.8125em;
+  font-size: 0.875em;
   border: 1px solid hsl(var(--border));
 }
 
 .prose table {
   display: block;
   overflow-x: auto;
-  font-size: 0.875em;
+  font-size: 0.9375em;
 }
 
 .prose a {

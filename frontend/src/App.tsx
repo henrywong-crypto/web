@@ -27,8 +27,8 @@ class ErrorBoundary extends React.Component<
       return (
         <div className="flex h-screen w-screen items-center justify-center bg-background text-foreground">
           <div className="max-w-md space-y-2 p-6 text-center">
-            <p className="text-sm font-medium">Something went wrong</p>
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="text-base font-medium">Something went wrong</p>
+            <p className="font-mono text-sm text-muted-foreground">
               {this.state.error.message}
             </p>
           </div>

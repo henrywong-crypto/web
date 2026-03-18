@@ -238,10 +238,10 @@ export default function ChatComposer({
                     i === slashMenuIndex ? "bg-accent" : "hover:bg-accent/60"
                   }`}
                 >
-                  <span className="font-mono text-xs font-medium text-foreground">
+                  <span className="font-mono text-sm font-medium text-foreground">
                     {cmd.name}
                   </span>
-                  <span className="truncate text-[11px] text-muted-foreground">
+                  <span className="truncate text-xs text-muted-foreground">
                     {cmd.description}
                   </span>
                 </button>
@@ -255,7 +255,7 @@ export default function ChatComposer({
               {pendingFiles.map((file, i) => (
                 <span
                   key={file.name + "-" + i}
-                  className="flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs text-foreground"
+                  className="flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-sm text-foreground"
                 >
                   <Paperclip className="h-2.5 w-2.5 text-muted-foreground" />
                   <span className="max-w-[160px] truncate">{file.name}</span>
@@ -299,7 +299,7 @@ export default function ChatComposer({
               placeholder="Message Claude…"
               disabled={blocked}
               rows={1}
-              className="max-h-[260px] min-h-[32px] flex-1 resize-none bg-transparent py-[5px] text-sm leading-snug text-foreground placeholder-muted-foreground/50 focus:outline-none disabled:opacity-60"
+              className="max-h-[260px] min-h-[32px] flex-1 resize-none bg-transparent py-[5px] text-base leading-snug text-foreground placeholder-muted-foreground/50 focus:outline-none disabled:opacity-60"
               style={{ height: "32px" }}
             />
 

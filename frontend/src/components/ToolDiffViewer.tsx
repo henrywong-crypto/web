@@ -46,7 +46,7 @@ export default function ToolDiffViewer({
         </div>
       )}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse font-mono text-xs">
+        <table className="w-full border-collapse font-mono text-sm">
           <tbody>
             {diffLines.map((line, i) => (
               <DiffLine key={i} line={line} />

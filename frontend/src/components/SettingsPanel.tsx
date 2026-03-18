@@ -79,7 +79,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-foreground">Settings</h2>
+          <h2 className="text-base font-semibold text-foreground">Settings</h2>
           <button
             onClick={onClose}
             className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -114,7 +114,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                 />
               )}
               {!settings.uses_bedrock && settings.base_url && (
-                <div className="text-xs text-muted-foreground">
+                <div className="text-sm text-muted-foreground">
                   Base URL:{" "}
                   <span className="font-mono text-foreground">
                     {settings.base_url}
@@ -176,10 +176,10 @@ function ApiKeySection({
         </button>
       </div>
       {saveResult === "success" && (
-        <p className="text-xs text-emerald-500">API key saved successfully.</p>
+        <p className="text-sm text-emerald-500">API key saved successfully.</p>
       )}
       {saveResult === "error" && (
-        <p className="text-xs text-red-400">
+        <p className="text-sm text-red-400">
           Failed to save. Please try again.
         </p>
       )}

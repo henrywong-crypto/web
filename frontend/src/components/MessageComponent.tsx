@@ -49,13 +49,13 @@ const MessageComponent = memo(
                 />
               </div>
             )}
-            <div className="rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground shadow-sm">
+            <div className="rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-base text-primary-foreground shadow-sm">
               <div className="whitespace-pre-wrap break-words leading-relaxed">
                 {message.content}
               </div>
             </div>
             <div className="mt-0.5 pr-0.5 text-right">
-              <span className="text-[10px] text-muted-foreground/50">
+              <span className="text-xs text-muted-foreground/50">
                 {formattedTime}
               </span>
             </div>
@@ -67,7 +67,7 @@ const MessageComponent = memo(
     if (message.type === "error") {
       return (
         <div className="px-4 py-0.5">
-          <div className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-2.5 text-sm text-destructive">
+          <div className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-2.5 text-base text-destructive">
             <span className="font-medium">Error: </span>
             {message.content}
           </div>
@@ -109,7 +109,7 @@ const MessageComponent = memo(
                 />
               </div>
             )}
-            <div className="min-w-0 overflow-x-auto text-sm leading-relaxed text-foreground">
+            <div className="min-w-0 overflow-x-auto text-base leading-relaxed text-foreground">
               <MarkdownContent content={message.content} />
             </div>
           </div>
@@ -129,10 +129,10 @@ const MessageComponent = memo(
             <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold tracking-wider text-primary-foreground shadow-sm">
               AI
             </div>
-            <span className="text-xs font-semibold text-foreground">
+            <span className="text-sm font-semibold text-foreground">
               Claude
             </span>
-            <span className="text-[10px] text-muted-foreground/60">
+            <span className="text-xs text-muted-foreground/60">
               {formattedTime}
             </span>
             {hovered && (
@@ -315,10 +315,10 @@ const markdownComponents = {
     <tr className="border-b border-border/40 even:bg-muted/40">{children}</tr>
   ),
   th: ({ children }: { children?: React.ReactNode }) => (
-    <th className="px-4 py-2.5 text-left text-sm font-semibold">{children}</th>
+    <th className="px-4 py-2.5 text-left text-[0.9375rem] font-semibold">{children}</th>
   ),
   td: ({ children }: { children?: React.ReactNode }) => (
-    <td className="px-4 py-2.5 align-top text-sm">{children}</td>
+    <td className="px-4 py-2.5 align-top text-[0.9375rem]">{children}</td>
   ),
 };
 
@@ -330,7 +330,7 @@ function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={remarkPlugins}
-      className="prose prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2"
+      className="prose max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2"
       components={markdownComponents as any}
     >
       {content}

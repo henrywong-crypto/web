@@ -61,8 +61,8 @@ function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
         <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold tracking-wider text-primary-foreground shadow-sm">
           AI
         </div>
-        <span className="text-xs font-semibold text-foreground">Claude</span>
-        <span className="text-[10px] text-muted-foreground/60">
+        <span className="text-sm font-semibold text-foreground">Claude</span>
+        <span className="text-xs text-muted-foreground/60">
           {formattedTime}
         </span>
       </div>
@@ -130,10 +130,10 @@ export default function ChatMessagesPane({
       >
         <div className="text-center">
           <div className="mb-4 text-5xl opacity-10">◈</div>
-          <p className="text-sm font-medium text-muted-foreground">
+          <p className="text-base font-medium text-muted-foreground">
             Start a new conversation
           </p>
-          <p className="mt-1 text-xs text-muted-foreground/50">
+          <p className="mt-1 text-sm text-muted-foreground/50">
             Type a message below to begin
           </p>
         </div>

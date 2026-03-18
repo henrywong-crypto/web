@@ -26,7 +26,7 @@ export default class MessageErrorBoundary extends React.Component<
       return (
         <div
           data-testid="message-error"
-          className="mx-4 my-1 rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2 text-xs text-destructive"
+          className="mx-4 my-1 rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2 text-sm text-destructive"
         >
           Failed to render message
         </div>

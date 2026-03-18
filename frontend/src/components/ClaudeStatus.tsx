@@ -64,7 +64,7 @@ export default function ClaudeStatus({
           <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-primary/70" />
           <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-primary/70" />
         </span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground">
           {statusText}
           {elapsedLabel && (
             <span className="ml-1.5 text-muted-foreground/50">

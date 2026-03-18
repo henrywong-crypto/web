@@ -38,7 +38,7 @@ export default function Sidebar({
 
       <div className="flex-1 overflow-y-auto py-1.5">
         {conversations.length === 0 ? (
-          <p className="px-3 py-8 text-center text-xs text-muted-foreground">
+          <p className="px-3 py-8 text-center text-sm text-muted-foreground">
             No conversations yet
           </p>
         ) : (
@@ -89,7 +89,7 @@ function ConversationRow({
 
   return (
     <div
-      className={`group relative flex cursor-pointer items-center gap-2 px-3 py-2 text-xs ${
+      className={`group relative flex cursor-pointer items-center gap-2 px-3 py-2 text-sm ${
         isActive
           ? "border-l-2 border-primary bg-primary/8 pl-[10px] text-foreground"
           : "text-muted-foreground hover:bg-accent hover:text-foreground"
