@@ -113,7 +113,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
                   saveResult={saveResult}
                 />
               )}
-              {settings.base_url && (
+              {!settings.uses_bedrock && settings.base_url && (
                 <div className="text-xs text-muted-foreground">
                   Base URL:{" "}
                   <span className="font-mono text-foreground">

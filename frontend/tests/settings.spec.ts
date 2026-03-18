@@ -98,4 +98,26 @@ test.describe("settings", () => {
 
     await expect(page.getByText("Failed to save. Please try again.")).toBeVisible();
   });
+
+  test("UF-30 shows Base URL when configured and not in Bedrock mode", async ({ page }) => {
+    await setupApp(page, {
+      settings: { uses_bedrock: false, has_api_key: false, base_url: "https://api.example.com" },
+    });
+
+    await page.getByTitle("Settings").click();
+
+    await expect(page.getByText("Base URL:")).toBeVisible();
+    await expect(page.getByText("https://api.example.com")).toBeVisible();
+  });
+
+  test("UF-31 hides Base URL in Bedrock mode even when base_url is set", async ({ page }) => {
+    await setupApp(page, {
+      settings: { uses_bedrock: true, has_api_key: false, base_url: "http://54.167.41.65:3000" },
+    });
+
+    await page.getByTitle("Settings").click();
+
+    await expect(page.getByText(/AWS Bedrock/)).toBeVisible();
+    await expect(page.getByText("Base URL:")).not.toBeVisible();
+  });
 });

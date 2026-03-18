@@ -69,6 +69,7 @@ class Session:
     conversation_id: str
     pending_question: asyncio.Future | None = None
     pending_question_data: dict | None = None
+    cancelled: bool = False
 
 
 # All live sessions keyed by task_id (a server-generated UUID).
@@ -106,9 +107,15 @@ def emit_sse(event_name: str, data: dict) -> None:
     Falls back to the session's current writer when the original writer has
     closed (e.g. the client disconnected and reconnected mid-query).
     """
+    # Suppress events (except done/error) when the session has been cancelled
+    # to prevent buffered responses from reaching the client after stop.
+    task_id = _emit_session_id.get()
+    if task_id and event_name not in ("done", "error_event"):
+        session = _sessions.get(task_id)
+        if session and session.cancelled:
+            return
     writer = _emit_writer.get()
     if writer is None or writer.is_closing():
-        task_id = _emit_session_id.get()
         session = _sessions.get(task_id) if task_id else None
         writer = session.writer if session else None
     if writer is None or writer.is_closing():
@@ -158,14 +165,15 @@ def handle_answer_question(msg: dict) -> None:
     log(f"answer_question for unknown request_id {request_id!r}")
 
 
-def handle_interrupt(msg: dict, writer: asyncio.StreamWriter) -> None:
+def handle_interrupt(msg: dict) -> None:
     """Cancel the query task identified by task_id."""
     task_id = msg.get("task_id")
     if not task_id:
         return
     session = _sessions.get(task_id)
-    if session and not session.task.done() and session.writer is writer:
+    if session and not session.task.done():
         log(f"interrupt received for session {task_id!r}, cancelling")
+        session.cancelled = True
         session.task.cancel()
 
 
@@ -215,7 +223,7 @@ async def route_connection(
         elif msg_type == "answer_question":
             handle_answer_question(msg)
         elif msg_type == "interrupt":
-            handle_interrupt(msg, writer)
+            handle_interrupt(msg)
         elif msg_type == "query":
             handle_query(msg, writer)
         else:

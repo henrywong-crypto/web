@@ -503,7 +503,7 @@ class TestHandleAnswerQuestion(unittest.IsolatedAsyncioTestCase):
 class TestHandleInterrupt(unittest.IsolatedAsyncioTestCase):
     """handle_interrupt cancels the task for the identified session."""
 
-    async def test_cancels_task_when_writer_matches_session_writer(self):
+    async def test_cancels_task(self):
         async def long_running():
             await asyncio.sleep(999)
 
@@ -514,28 +514,28 @@ class TestHandleInterrupt(unittest.IsolatedAsyncioTestCase):
             task=task, writer=writer, conversation_id=""
         )
         try:
-            agent.handle_interrupt({"type": "interrupt", "task_id": task_id}, writer)
+            agent.handle_interrupt({"type": "interrupt", "task_id": task_id})
             self.assertGreater(task.cancelling(), 0)
         finally:
             agent._sessions.pop(task_id, None)
             task.cancel()
 
-    async def test_does_not_cancel_when_writer_does_not_match(self):
+    async def test_cancels_even_when_writer_does_not_match(self):
+        """Interrupts arrive on a different SSH connection (different writer),
+        so handle_interrupt must NOT require writer identity."""
         async def long_running():
             await asyncio.sleep(999)
 
         task = asyncio.create_task(long_running())
         session_writer = MockWriter()
-        other_writer = MockWriter()
         task_id = "intr-mismatch"
         agent._sessions[task_id] = agent.Session(
             task=task, writer=session_writer, conversation_id=""
         )
         try:
-            agent.handle_interrupt(
-                {"type": "interrupt", "task_id": task_id}, other_writer
-            )
-            self.assertEqual(task.cancelling(), 0)
+            agent.handle_interrupt({"type": "interrupt", "task_id": task_id})
+            self.assertGreater(task.cancelling(), 0)
+            self.assertTrue(agent._sessions[task_id].cancelled)
         finally:
             agent._sessions.pop(task_id, None)
             task.cancel()
@@ -549,17 +549,164 @@ class TestHandleInterrupt(unittest.IsolatedAsyncioTestCase):
             task=task, writer=writer, conversation_id=""
         )
         try:
-            agent.handle_interrupt({"type": "interrupt", "task_id": task_id}, writer)
+            agent.handle_interrupt({"type": "interrupt", "task_id": task_id})
             self.assertTrue(task.done())
             self.assertFalse(task.cancelled())
         finally:
             agent._sessions.pop(task_id, None)
 
     async def test_ignores_unknown_task_id(self):
-        agent.handle_interrupt({"type": "interrupt", "task_id": "ghost"}, MockWriter())
+        agent.handle_interrupt({"type": "interrupt", "task_id": "ghost"})
 
     async def test_missing_task_id_is_no_op(self):
-        agent.handle_interrupt({"type": "interrupt"}, MockWriter())
+        agent.handle_interrupt({"type": "interrupt"})
+
+    async def test_sets_cancelled_flag_on_session(self):
+        """handle_interrupt should set session.cancelled = True."""
+        async def long_running():
+            await asyncio.sleep(999)
+
+        task = asyncio.create_task(long_running())
+        writer = MockWriter()
+        task_id = "intr-cancel-flag"
+        agent._sessions[task_id] = agent.Session(
+            task=task, writer=writer, conversation_id=""
+        )
+        try:
+            self.assertFalse(agent._sessions[task_id].cancelled)
+            agent.handle_interrupt({"type": "interrupt", "task_id": task_id})
+            self.assertTrue(agent._sessions[task_id].cancelled)
+        finally:
+            agent._sessions.pop(task_id, None)
+            task.cancel()
+
+    async def test_cancelled_flag_set_even_when_writer_does_not_match(self):
+        """cancelled flag should be set regardless of writer identity."""
+        async def long_running():
+            await asyncio.sleep(999)
+
+        task = asyncio.create_task(long_running())
+        session_writer = MockWriter()
+        task_id = "intr-cancel-mismatch"
+        agent._sessions[task_id] = agent.Session(
+            task=task, writer=session_writer, conversation_id=""
+        )
+        try:
+            agent.handle_interrupt({"type": "interrupt", "task_id": task_id})
+            self.assertTrue(agent._sessions[task_id].cancelled)
+        finally:
+            agent._sessions.pop(task_id, None)
+            task.cancel()
+
+
+class TestEmitSseCancelledSuppression(unittest.IsolatedAsyncioTestCase):
+    """emit_sse suppresses events (except done/error_event) when session is cancelled."""
+
+    async def _setup_cancelled_session(self):
+        """Helper: create a cancelled session and set context vars."""
+        writer = MockWriter()
+        task_id = "cancel-suppress"
+        task = asyncio.create_task(asyncio.sleep(999))
+        session = agent.Session(
+            task=task, writer=writer, conversation_id="", cancelled=True
+        )
+        agent._sessions[task_id] = session
+        token1 = agent._emit_writer.set(writer)
+        token2 = agent._emit_session_id.set(task_id)
+        return writer, task_id, task, token1, token2
+
+    async def _cleanup(self, task_id, task, token1, token2):
+        agent._emit_writer.reset(token1)
+        agent._emit_session_id.reset(token2)
+        agent._sessions.pop(task_id, None)
+        task.cancel()
+
+    async def test_text_delta_suppressed_when_cancelled(self):
+        writer, task_id, task, t1, t2 = await self._setup_cancelled_session()
+        try:
+            agent.emit_sse("text_delta", {"text": "should not appear"})
+            self.assertEqual(len(writer.written_events()), 0)
+        finally:
+            await self._cleanup(task_id, task, t1, t2)
+
+    async def test_thinking_delta_suppressed_when_cancelled(self):
+        writer, task_id, task, t1, t2 = await self._setup_cancelled_session()
+        try:
+            agent.emit_sse("thinking_delta", {"thinking": "nope"})
+            self.assertEqual(len(writer.written_events()), 0)
+        finally:
+            await self._cleanup(task_id, task, t1, t2)
+
+    async def test_init_suppressed_when_cancelled(self):
+        writer, task_id, task, t1, t2 = await self._setup_cancelled_session()
+        try:
+            agent.emit_sse("init", {})
+            self.assertEqual(len(writer.written_events()), 0)
+        finally:
+            await self._cleanup(task_id, task, t1, t2)
+
+    async def test_tool_start_suppressed_when_cancelled(self):
+        writer, task_id, task, t1, t2 = await self._setup_cancelled_session()
+        try:
+            agent.emit_sse("tool_start", {"id": "t1", "name": "Read", "input": {}})
+            self.assertEqual(len(writer.written_events()), 0)
+        finally:
+            await self._cleanup(task_id, task, t1, t2)
+
+    async def test_done_still_emitted_when_cancelled(self):
+        writer, task_id, task, t1, t2 = await self._setup_cancelled_session()
+        try:
+            agent.emit_sse("done", {"session_id": None, "task_id": task_id})
+            events = writer.written_events()
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["event"], "done")
+        finally:
+            await self._cleanup(task_id, task, t1, t2)
+
+    async def test_error_event_still_emitted_when_cancelled(self):
+        writer, task_id, task, t1, t2 = await self._setup_cancelled_session()
+        try:
+            agent.emit_sse("error_event", {"message": "err"})
+            events = writer.written_events()
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["event"], "error_event")
+        finally:
+            await self._cleanup(task_id, task, t1, t2)
+
+    async def test_non_cancelled_session_emits_normally(self):
+        """Events should pass through when session.cancelled is False."""
+        writer = MockWriter()
+        task_id = "cancel-not-set"
+        task = asyncio.create_task(asyncio.sleep(999))
+        agent._sessions[task_id] = agent.Session(
+            task=task, writer=writer, conversation_id="", cancelled=False
+        )
+        token1 = agent._emit_writer.set(writer)
+        token2 = agent._emit_session_id.set(task_id)
+        try:
+            agent.emit_sse("text_delta", {"text": "hello"})
+            events = writer.written_events()
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["data"]["text"], "hello")
+        finally:
+            agent._emit_writer.reset(token1)
+            agent._emit_session_id.reset(token2)
+            agent._sessions.pop(task_id, None)
+            task.cancel()
+
+    async def test_multiple_events_all_suppressed_except_done(self):
+        """Simulate a burst of events after cancel — only done should get through."""
+        writer, task_id, task, t1, t2 = await self._setup_cancelled_session()
+        try:
+            agent.emit_sse("text_delta", {"text": "a"})
+            agent.emit_sse("text_delta", {"text": "b"})
+            agent.emit_sse("tool_start", {"id": "t1", "name": "X", "input": {}})
+            agent.emit_sse("done", {"session_id": None, "task_id": task_id})
+            events = writer.written_events()
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]["event"], "done")
+        finally:
+            await self._cleanup(task_id, task, t1, t2)
 
 
 class TestHandleQuery(unittest.IsolatedAsyncioTestCase):
