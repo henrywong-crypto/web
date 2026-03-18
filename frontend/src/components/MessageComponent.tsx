@@ -217,7 +217,8 @@ function CodeBlock({ node, inline, className, children, ...props }: CodeBlockPro
         type="button"
         onClick={handleCopy}
         title={copied ? "Copied!" : "Copy code"}
-        className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-md border border-gray-600 bg-gray-700/80 px-2 py-1 text-xs text-white opacity-0 transition-opacity hover:bg-gray-700 focus:opacity-100 group-hover:opacity-100"
+        aria-label={copied ? "Copied!" : "Copy code"}
+        className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-md border border-border bg-muted/80 px-2 py-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover:opacity-100"
       >
         {copied ? (
           <>

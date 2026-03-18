@@ -21,6 +21,10 @@ export default class MessageErrorBoundary extends React.Component<
     return { hasError: true };
   }
 
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error("[MessageErrorBoundary]", error, errorInfo);
+  }
+
   render() {
     if (this.state.hasError) {
       return (

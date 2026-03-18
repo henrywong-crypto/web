@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { ChevronDown } from "lucide-react";
 import type { ChatMessage } from "../types";
 import MessageComponent from "./MessageComponent";
@@ -45,7 +45,7 @@ function groupIntoTurns(messages: ChatMessage[]): TurnGroup[] {
   return groups;
 }
 
-function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
+const AssistantTurnCard = React.memo(function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
   const [hovered, setHovered] = useState(false);
   const firstMsg = messages[0];
   const formattedTime = new Date(firstMsg.timestamp).toLocaleTimeString([], {
@@ -90,7 +90,7 @@ function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
       </div>
     </div>
   );
-}
+});
 
 export default function ChatMessagesPane({
   messages,
@@ -99,6 +99,7 @@ export default function ChatMessagesPane({
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const rafRef = useRef<number | null>(null);
 
   const turnGroups = useMemo(() => groupIntoTurns(messages), [messages]);
 
@@ -109,23 +110,23 @@ export default function ChatMessagesPane({
     el.scrollTop = el.scrollHeight;
   }, [messages.length, isLoading]);
 
-  const handleWheel = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    userScrolledRef.current = !atBottom;
-    setShowScrollBtn(!atBottom);
-  };
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
-  const handleScroll = () => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-    if (atBottom) {
-      userScrolledRef.current = false;
-      setShowScrollBtn(false);
-    }
-  };
+  const handleScroll = useCallback(() => {
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const el = scrollRef.current;
+      if (!el) return;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      userScrolledRef.current = !atBottom;
+      setShowScrollBtn(!atBottom);
+    });
+  }, []);
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
@@ -158,7 +159,6 @@ export default function ChatMessagesPane({
     <div className="relative flex-1 overflow-hidden">
       <div
         ref={scrollRef}
-        onWheel={handleWheel}
         onScroll={handleScroll}
         className="h-full space-y-1 overflow-y-auto py-4"
       >

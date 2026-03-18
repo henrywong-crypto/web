@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { FileText } from "lucide-react";
 
 interface ToolDiffViewerProps {
@@ -22,7 +22,7 @@ export default function ToolDiffViewer({
   filePath,
   badge,
 }: ToolDiffViewerProps) {
-  const diffLines = computeDiffLines(oldContent, newContent);
+  const diffLines = useMemo(() => computeDiffLines(oldContent, newContent), [oldContent, newContent]);
   const truncated =
     oldContent.split("\n").length > MAX_DIFF_LINES ||
     newContent.split("\n").length > MAX_DIFF_LINES;

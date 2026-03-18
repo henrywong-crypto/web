@@ -87,6 +87,7 @@ function ToolHeader({
   return (
     <div>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/50 active:bg-accent/70"
       >
@@ -283,6 +284,7 @@ function ToolResultView({ result }: { result: ToolResult }) {
             )}
           </div>
           <button
+            type="button"
             onClick={() => setOpen((v) => !v)}
             className="mt-1 text-xs text-primary hover:underline"
           >
