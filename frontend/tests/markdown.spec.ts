@@ -7,7 +7,7 @@
  * MR-04  Inline code has distinct background and border styling
  * MR-05  Inline code does NOT show backtick characters
  * MR-06  Links render as clickable anchors with target=_blank
- * MR-07  Tables render with borders and header styling
+ * MR-07  Tables render with container, header, row separation, alternating colors, padding, and contrast
  * MR-08  Blockquotes render with left border accent
  * MR-09  Lists render with proper markers
  * MR-10  Assistant text has readable contrast against background
@@ -116,9 +116,10 @@ test.describe("markdown rendering", () => {
     await expect(link).toHaveAttribute("target", "_blank");
   });
 
-  test("MR-07 tables render with borders and header styling", async ({ page }) => {
+  test("MR-07 tables render with header styling and row separation", async ({ page }) => {
     const ctrl = await setupApp(page, {});
-    const table = "| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 25 |";
+    const table =
+      "| Name | Age | Role |\n| --- | --- | --- |\n| Alice | 30 | Engineer |\n| Bob | 25 | Designer |\n| Carol | 28 | Manager |";
 
     await sendMessage(page, "show table");
     ctrl.sendSseEvents(sse.text(table, "sess-mr7"));
@@ -126,19 +127,116 @@ test.describe("markdown rendering", () => {
     const tableEl = page.locator("table").first();
     await expect(tableEl).toBeVisible();
 
-    // Headers should exist
-    await expect(page.locator("th").filter({ hasText: "Name" })).toBeVisible();
-    await expect(page.locator("th").filter({ hasText: "Age" })).toBeVisible();
+    // ── Structure: all headers and cells rendered ──
+    for (const header of ["Name", "Age", "Role"]) {
+      await expect(page.locator("th").filter({ hasText: header })).toBeVisible();
+    }
+    for (const cell of ["Alice", "30", "Engineer", "Bob", "25", "Designer", "Carol", "28", "Manager"]) {
+      await expect(page.locator("td").filter({ hasText: cell })).toBeVisible();
+    }
 
-    // Data cells should exist
-    await expect(page.locator("td").filter({ hasText: "Alice" })).toBeVisible();
-    await expect(page.locator("td").filter({ hasText: "30" })).toBeVisible();
+    // ── Container: border and rounded corners ──
+    const tableWrapper = tableEl.locator("..");
+    const wrapperStyle = await tableWrapper.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { border: s.borderTopWidth, radius: s.borderRadius, overflow: s.overflowX };
+    });
+    expect(wrapperStyle.border).not.toBe("0px");
+    expect(parseFloat(wrapperStyle.radius)).toBeGreaterThan(0);
+    expect(wrapperStyle.overflow).toBe("auto");
 
-    // Table cells should have visible borders
-    const thBorder = await page.locator("th").first().evaluate(
-      (el) => getComputedStyle(el).borderWidth,
+    // ── Container: has a background (subtle card effect) ──
+    const wrapperBg = await tableWrapper.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
     );
-    expect(thBorder).not.toBe("0px");
+    expect(wrapperBg).not.toBe("rgba(0, 0, 0, 0)");
+    expect(wrapperBg).not.toBe("transparent");
+
+    // ── Header: background color for visual distinction ──
+    const thead = page.locator("thead").first();
+    const theadBg = await thead.evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(theadBg).not.toBe("rgba(0, 0, 0, 0)");
+    expect(theadBg).not.toBe("transparent");
+
+    // ── Header: bottom border separating header from body ──
+    const theadBorderBottom = await thead.evaluate(
+      (el) => getComputedStyle(el).borderBottomWidth,
+    );
+    expect(theadBorderBottom).not.toBe("0px");
+
+    // ── Rows: each data row has a bottom border for separation ──
+    const dataRows = page.locator("tbody tr");
+    const rowCount = await dataRows.count();
+    expect(rowCount).toBe(3);
+    for (let i = 0; i < rowCount; i++) {
+      const borderBottom = await dataRows.nth(i).evaluate(
+        (el) => getComputedStyle(el).borderBottomWidth,
+      );
+      expect(borderBottom).not.toBe("0px");
+    }
+
+    // ── Rows: alternating background colors (even rows differ from odd) ──
+    const firstRowBg = await dataRows.nth(0).evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    const secondRowBg = await dataRows.nth(1).evaluate(
+      (el) => getComputedStyle(el).backgroundColor,
+    );
+    expect(firstRowBg).not.toBe(secondRowBg);
+
+    // ── Cells: proper padding ──
+    const thPadding = await page.locator("th").first().evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { left: s.paddingLeft, top: s.paddingTop };
+    });
+    expect(parseFloat(thPadding.left)).toBeGreaterThan(0);
+    expect(parseFloat(thPadding.top)).toBeGreaterThan(0);
+
+    const tdPadding = await page.locator("td").first().evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { left: s.paddingLeft, top: s.paddingTop };
+    });
+    expect(parseFloat(tdPadding.left)).toBeGreaterThan(0);
+    expect(parseFloat(tdPadding.top)).toBeGreaterThan(0);
+
+    // ── Header text: font-weight is semibold/bold ──
+    const thFontWeight = await page.locator("th").first().evaluate(
+      (el) => getComputedStyle(el).fontWeight,
+    );
+    expect(parseInt(thFontWeight)).toBeGreaterThanOrEqual(600);
+
+    // ── Text contrast: table content is readable (WCAG AA) ──
+    function parseCssRgb(c: string): [number, number, number] {
+      const m = c.match(/[\d.]+/g);
+      if (!m) return [0, 0, 0];
+      return [parseFloat(m[0]), parseFloat(m[1]), parseFloat(m[2])];
+    }
+    function luminance(r: number, g: number, b: number): number {
+      const [rs, gs, bs] = [r, g, b].map((c) => {
+        c /= 255;
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+    }
+
+    const tdEl = page.locator("td").filter({ hasText: "Alice" }).first();
+    const { fg: tdFg, bg: tdBg } = await tdEl.evaluate((el) => {
+      const s = getComputedStyle(el);
+      return { fg: s.color, bg: s.backgroundColor };
+    });
+
+    const [r1, g1, b1] = parseCssRgb(tdFg);
+    let [r2, g2, b2] = parseCssRgb(tdBg);
+    if (tdBg === "rgba(0, 0, 0, 0)" || tdBg === "transparent") {
+      // approximate dark mode background
+      [r2, g2, b2] = [13, 17, 23];
+    }
+    const l1 = luminance(r1, g1, b1);
+    const l2 = luminance(r2, g2, b2);
+    const ratio = (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+    expect(ratio).toBeGreaterThan(4.5);
   });
 
   test("MR-08 blockquotes render with left border accent", async ({ page }) => {

@@ -277,18 +277,21 @@ const markdownComponents = {
     <div className="mb-2 last:mb-0">{children}</div>
   ),
   table: ({ children }: { children?: React.ReactNode }) => (
-    <div className="my-2 overflow-x-auto">
-      <table className="min-w-full border-collapse border border-border">{children}</table>
+    <div className="my-3 overflow-x-auto rounded-lg border border-border/60 bg-muted/30">
+      <table className="min-w-full border-collapse">{children}</table>
     </div>
   ),
   thead: ({ children }: { children?: React.ReactNode }) => (
-    <thead className="bg-accent">{children}</thead>
+    <thead className="bg-primary/10 border-b-2 border-primary/20">{children}</thead>
+  ),
+  tr: ({ children }: { children?: React.ReactNode }) => (
+    <tr className="border-b border-border/40 even:bg-muted/40">{children}</tr>
   ),
   th: ({ children }: { children?: React.ReactNode }) => (
-    <th className="border border-border px-3 py-2 text-left text-sm font-semibold">{children}</th>
+    <th className="px-4 py-2.5 text-left text-sm font-semibold">{children}</th>
   ),
   td: ({ children }: { children?: React.ReactNode }) => (
-    <td className="border border-border px-3 py-2 align-top text-sm">{children}</td>
+    <td className="px-4 py-2.5 align-top text-sm">{children}</td>
   ),
 };
 
