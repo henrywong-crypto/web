@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import type { ChatMessage } from "../types";
 import MessageComponent from "./MessageComponent";
+import MessageCopyControl from "./MessageCopyControl";
 import MessageErrorBoundary from "./MessageErrorBoundary";
 
 interface ChatMessagesPaneProps {
@@ -45,16 +46,25 @@ function groupIntoTurns(messages: ChatMessage[]): TurnGroup[] {
 }
 
 function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
+  const [hovered, setHovered] = useState(false);
   const firstMsg = messages[0];
   const formattedTime = new Date(firstMsg.timestamp).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
 
+  // Concatenate all assistant text content in this turn for the copy button
+  const fullText = messages
+    .filter((m) => m.type === "assistant" && !("isThinking" in m && m.isThinking))
+    .map((m) => m.content)
+    .join("\n\n");
+
   return (
     <div
       data-testid="assistant-card"
       className="mx-4 my-2 rounded-2xl bg-card px-5 py-4 shadow-sm ring-1 ring-border/50"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {/* Card header */}
       <div className="mb-3 flex items-center gap-2.5">
@@ -65,6 +75,9 @@ function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
         <span className="text-xs text-muted-foreground/60">
           {formattedTime}
         </span>
+        {hovered && fullText && (
+          <MessageCopyControl content={fullText} messageType="assistant" />
+        )}
       </div>
 
       {/* Card body — all messages in this turn */}

@@ -93,25 +93,11 @@ const MessageComponent = memo(
 
     // Regular assistant message
     if (insideCard) {
-      // Rendered inside an assistant card — no header, no outer padding
+      // Rendered inside an assistant card — no header, no copy button (card header handles it)
       return (
-        <div
-          className="py-0.5"
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
-        >
-          <div className="relative">
-            {hovered && (
-              <div className="absolute -left-7 top-0">
-                <MessageCopyControl
-                  content={message.content}
-                  messageType="assistant"
-                />
-              </div>
-            )}
-            <div className="min-w-0 overflow-x-auto text-base leading-relaxed text-foreground">
-              <MarkdownContent content={message.content} />
-            </div>
+        <div className="py-0.5">
+          <div className="min-w-0 overflow-x-auto text-base leading-relaxed text-foreground">
+            <MarkdownContent content={message.content} />
           </div>
         </div>
       );
