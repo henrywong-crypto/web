@@ -12,10 +12,11 @@ import ToolRenderer from "./ToolRenderer";
 interface MessageComponentProps {
   message: ChatMessage;
   prevMessage: ChatMessage | null;
+  insideCard?: boolean;
 }
 
 const MessageComponent = memo(
-  ({ message, prevMessage }: MessageComponentProps) => {
+  ({ message, prevMessage, insideCard }: MessageComponentProps) => {
     const isGrouped =
       prevMessage !== null &&
       prevMessage.type === message.type &&
@@ -80,7 +81,7 @@ const MessageComponent = memo(
 
     if (message.type === "tool") {
       return (
-        <div className="px-4 py-0.5">
+        <div className={insideCard ? "py-0.5" : "px-4 py-0.5"}>
           <ToolRenderer
             toolName={message.toolName}
             toolInput={message.toolInput}
@@ -91,6 +92,32 @@ const MessageComponent = memo(
     }
 
     // Regular assistant message
+    if (insideCard) {
+      // Rendered inside an assistant card — no header, no outer padding
+      return (
+        <div
+          className="py-0.5"
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+        >
+          <div className="relative">
+            {hovered && (
+              <div className="absolute -left-7 top-0">
+                <MessageCopyControl
+                  content={message.content}
+                  messageType="assistant"
+                />
+              </div>
+            )}
+            <div className="min-w-0 overflow-x-auto text-sm leading-relaxed text-foreground">
+              <MarkdownContent content={message.content} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Standalone assistant message (outside card, e.g. transcript view)
     return (
       <div
         className={twMerge("px-4", isGrouped ? "py-0.5" : "py-1")}

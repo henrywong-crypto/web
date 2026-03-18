@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { ChevronDown } from "lucide-react";
 import type { ChatMessage } from "../types";
 import MessageComponent from "./MessageComponent";
@@ -9,6 +9,76 @@ interface ChatMessagesPaneProps {
   isLoading: boolean;
 }
 
+/** A "turn group" is a sequence of assistant + tool messages between user messages. */
+type TurnGroup =
+  | { kind: "user" | "error"; message: ChatMessage }
+  | { kind: "assistant-turn"; messages: ChatMessage[]; firstTimestamp: number };
+
+function groupIntoTurns(messages: ChatMessage[]): TurnGroup[] {
+  const groups: TurnGroup[] = [];
+  let currentTurn: ChatMessage[] | null = null;
+
+  const flushTurn = () => {
+    if (currentTurn && currentTurn.length > 0) {
+      groups.push({
+        kind: "assistant-turn",
+        messages: currentTurn,
+        firstTimestamp: currentTurn[0].timestamp,
+      });
+      currentTurn = null;
+    }
+  };
+
+  for (const msg of messages) {
+    if (msg.type === "assistant" || msg.type === "tool") {
+      // Skip thinking messages
+      if (msg.type === "assistant" && msg.isThinking) continue;
+      if (!currentTurn) currentTurn = [];
+      currentTurn.push(msg);
+    } else {
+      flushTurn();
+      groups.push({ kind: msg.type === "user" ? "user" : "error", message: msg });
+    }
+  }
+  flushTurn();
+  return groups;
+}
+
+function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
+  const firstMsg = messages[0];
+  const formattedTime = new Date(firstMsg.timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <div
+      data-testid="assistant-card"
+      className="mx-4 my-2 rounded-2xl bg-card px-5 py-4 shadow-sm ring-1 ring-border/50"
+    >
+      {/* Card header */}
+      <div className="mb-3 flex items-center gap-2.5">
+        <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold tracking-wider text-primary-foreground shadow-sm">
+          AI
+        </div>
+        <span className="text-xs font-semibold text-foreground">Claude</span>
+        <span className="text-[10px] text-muted-foreground/60">
+          {formattedTime}
+        </span>
+      </div>
+
+      {/* Card body — all messages in this turn */}
+      <div className="space-y-1">
+        {messages.map((msg) => (
+          <MessageErrorBoundary key={msg.id}>
+            <MessageComponent message={msg} prevMessage={null} insideCard />
+          </MessageErrorBoundary>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ChatMessagesPane({
   messages,
   isLoading,
@@ -16,6 +86,8 @@ export default function ChatMessagesPane({
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+
+  const turnGroups = useMemo(() => groupIntoTurns(messages), [messages]);
 
   useEffect(() => {
     if (userScrolledRef.current) return;
@@ -78,16 +150,23 @@ export default function ChatMessagesPane({
         className="h-full space-y-1 overflow-y-auto py-4"
       >
         <div className="mx-auto max-w-4xl">
-        {messages.map((message, index) => {
-          const prevMessage = index > 0 ? messages[index - 1] : null;
-          return (
-            <div key={message.id} className="message-slide-in">
-              <MessageErrorBoundary>
-                <MessageComponent message={message} prevMessage={prevMessage} />
-              </MessageErrorBoundary>
-            </div>
-          );
-        })}
+          {turnGroups.map((group, i) => {
+            if (group.kind === "assistant-turn") {
+              return (
+                <div key={`turn-${group.messages[0].id}`} className="message-slide-in">
+                  <AssistantTurnCard messages={group.messages} />
+                </div>
+              );
+            }
+            const msg = group.message;
+            return (
+              <div key={msg.id} className="message-slide-in">
+                <MessageErrorBoundary>
+                  <MessageComponent message={msg} prevMessage={null} />
+                </MessageErrorBoundary>
+              </div>
+            );
+          })}
         </div>
       </div>
 
