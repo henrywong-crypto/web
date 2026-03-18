@@ -76,7 +76,14 @@ const MessageComponent = memo(
     }
 
     if (message.type === "assistant" && message.isThinking) {
-      return null;
+      if (!message.content) return null;
+      return (
+        <div className={insideCard ? "py-0.5" : "px-4 py-0.5"}>
+          <div className="text-sm italic text-muted-foreground/70 leading-relaxed">
+            {message.content}
+          </div>
+        </div>
+      );
     }
 
     if (message.type === "tool") {

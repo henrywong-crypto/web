@@ -176,7 +176,7 @@ export interface FileEntry {
   size: number;
 }
 
-export type StreamPhase = "idle" | "thinking" | "responding" | "tool_use";
+export type StreamPhase = "idle" | "processing" | "thinking" | "responding" | "tool_use";
 
 export interface StreamPhaseInfo {
   phase: StreamPhase;

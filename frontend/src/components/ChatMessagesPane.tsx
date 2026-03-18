@@ -32,8 +32,6 @@ function groupIntoTurns(messages: ChatMessage[]): TurnGroup[] {
 
   for (const msg of messages) {
     if (msg.type === "assistant" || msg.type === "tool") {
-      // Skip thinking messages
-      if (msg.type === "assistant" && msg.isThinking) continue;
       if (!currentTurn) currentTurn = [];
       currentTurn.push(msg);
     } else {

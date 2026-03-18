@@ -239,7 +239,7 @@ export function useSseHandlers(
           const id = generateId();
           ss.thinkingMsgId = id;
           ss.assistantMsgId = null;
-          setStreamPhase(session, { phase: "thinking" });
+          setStreamPhase(session, { phase: "processing" });
           addMessage(session, {
             id,
             type: "assistant",
@@ -257,6 +257,7 @@ export function useSseHandlers(
         case "thinking_delta": {
           if (!session || !ss) break;
           const { thinking } = event.payload;
+          setStreamPhase(session, { phase: "thinking" });
           if (ss.thinkingMsgId) {
             updateMessageById(session, ss.thinkingMsgId, (m) => ({
               ...m,

@@ -10,6 +10,8 @@ function formatElapsedTime(totalSeconds: number): string {
 
 function phaseLabel(info: StreamPhaseInfo): string {
   switch (info.phase) {
+    case "processing":
+      return "Processing";
     case "thinking":
       return "Thinking";
     case "responding":
@@ -17,7 +19,7 @@ function phaseLabel(info: StreamPhaseInfo): string {
     case "tool_use":
       return info.toolName ? `Using ${info.toolName}` : "Using tool";
     default:
-      return "Thinking";
+      return "Processing";
   }
 }
 
