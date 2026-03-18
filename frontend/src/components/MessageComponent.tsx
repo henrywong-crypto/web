@@ -2,7 +2,7 @@ import React, { memo, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import rehypeSanitize from "rehype-sanitize";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { twMerge } from "tailwind-merge";
 import type { ChatMessage } from "../types";
 import MessageCopyControl from "./MessageCopyControl";
@@ -228,6 +228,14 @@ function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
   );
 }
 
+const sanitizeSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    code: [...(defaultSchema.attributes?.code ?? []), "className"],
+  },
+};
+
 function MarkdownContent({ content }: { content: string }) {
   if (content === "__FORCE_RENDER_ERROR__") {
     throw new Error("Forced render error for testing");
@@ -235,8 +243,8 @@ function MarkdownContent({ content }: { content: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkBreaks]}
-      rehypePlugins={[rehypeSanitize]}
-      className="prose prose-sm max-w-none dark:prose-invert prose-code:text-sm"
+      rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
+      className="prose prose-sm max-w-none dark:prose-invert prose-code:text-sm prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2"
       components={{ pre: CodeBlock }}
     >
       {content}

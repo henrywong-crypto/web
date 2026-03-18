@@ -176,4 +176,11 @@ export interface FileEntry {
   size: number;
 }
 
+export type StreamPhase = "idle" | "thinking" | "responding" | "tool_use";
+
+export interface StreamPhaseInfo {
+  phase: StreamPhase;
+  toolName?: string;
+}
+
 export type ViewTab = "chat" | "terminal";

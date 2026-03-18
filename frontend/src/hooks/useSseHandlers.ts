@@ -148,6 +148,7 @@ export function useSseHandlers(
     getMessages,
     setMessages,
     setViewConversationId,
+    setStreamPhase,
     generateId,
   } = chatState;
 
@@ -238,6 +239,7 @@ export function useSseHandlers(
           const id = generateId();
           ss.thinkingMsgId = id;
           ss.assistantMsgId = null;
+          setStreamPhase(session, { phase: "thinking" });
           addMessage(session, {
             id,
             type: "assistant",
@@ -272,6 +274,7 @@ export function useSseHandlers(
           if (!session || !ss) break;
           const { text } = event.payload;
           sealThinking();
+          setStreamPhase(session, { phase: "responding" });
           if (!ss.assistantMsgId) {
             const id = generateId();
             ss.assistantMsgId = id;
@@ -299,6 +302,7 @@ export function useSseHandlers(
           const { id: toolId, name, input } = event.payload;
           sealThinking();
           ss.assistantMsgId = null;
+          setStreamPhase(session, { phase: "tool_use", toolName: name });
           if (name === "AskUserQuestion") break;
           const msgId = generateId();
           ss.toolIdToMsgId.set(toolId, msgId);
@@ -322,6 +326,7 @@ export function useSseHandlers(
         case "tool_result": {
           if (!session || !ss) break;
           const { tool_use_id, content, is_error } = event.payload;
+          setStreamPhase(session, { phase: "thinking" });
           const msgId = ss.toolIdToMsgId.get(tool_use_id);
           if (msgId) {
             updateMessageById(session, msgId, (m) => {
@@ -370,6 +375,7 @@ export function useSseHandlers(
 
         case "done": {
           const { session_id, task_id, conversation_id } = event.payload;
+          setStreamPhase(conversation_id, { phase: "idle" });
           const doneState = getOrCreateStreamState(
             streamStateRef.current,
             conversation_id,
@@ -429,6 +435,7 @@ export function useSseHandlers(
             ss.taskId = null;
           }
           if (session) {
+            setStreamPhase(session, { phase: "idle" });
             removeRunningConversation(session);
             setSessionPendingQuestion(session, null);
             streamStateRef.current.delete(session);

@@ -1,13 +1,5 @@
 import React, { useEffect, useState } from "react";
-
-const ACTION_WORDS = [
-  "Thinking",
-  "Processing",
-  "Analyzing",
-  "Working",
-  "Computing",
-  "Reasoning",
-];
+import type { StreamPhaseInfo } from "../types";
 
 function formatElapsedTime(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
@@ -16,13 +8,28 @@ function formatElapsedTime(totalSeconds: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
+function phaseLabel(info: StreamPhaseInfo): string {
+  switch (info.phase) {
+    case "thinking":
+      return "Thinking";
+    case "responding":
+      return "Responding";
+    case "tool_use":
+      return info.toolName ? `Using ${info.toolName}` : "Using tool";
+    default:
+      return "Thinking";
+  }
+}
+
 interface ClaudeStatusProps {
   isLoading: boolean;
+  streamPhase: StreamPhaseInfo;
   onAbort?: () => void;
 }
 
 export default function ClaudeStatus({
   isLoading,
+  streamPhase,
   onAbort,
 }: ClaudeStatusProps) {
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -41,8 +48,7 @@ export default function ClaudeStatus({
 
   if (!isLoading) return null;
 
-  const actionIndex = Math.floor(elapsedTime / 3) % ACTION_WORDS.length;
-  const statusText = ACTION_WORDS[actionIndex];
+  const statusText = phaseLabel(streamPhase);
   const elapsedLabel =
     elapsedTime > 0 ? formatElapsedTime(elapsedTime) : "";
 
@@ -59,7 +65,7 @@ export default function ClaudeStatus({
           <span className="thinking-dot h-1.5 w-1.5 rounded-full bg-primary/70" />
         </span>
         <span className="text-xs text-muted-foreground">
-          Claude is {statusText.toLowerCase()}
+          {statusText}
           {elapsedLabel && (
             <span className="ml-1.5 text-muted-foreground/50">
               · {elapsedLabel}
