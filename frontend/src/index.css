@@ -127,6 +127,12 @@ select,
   font-size: 0.875em;
 }
 
+.prose code::before,
+.prose code::after {
+  content: "" !important;
+  display: none !important;
+}
+
 .prose :not(pre) > code {
   background-color: hsl(var(--muted));
   padding: 0.15em 0.4em;

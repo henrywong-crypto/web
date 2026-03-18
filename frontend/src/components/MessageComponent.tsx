@@ -1,8 +1,9 @@
-import React, { memo, useEffect, useRef, useState } from "react";
+import React, { memo, useMemo, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
-import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { twMerge } from "tailwind-merge";
 import type { ChatMessage } from "../types";
 import MessageCopyControl from "./MessageCopyControl";
@@ -142,24 +143,21 @@ MessageComponent.displayName = "MessageComponent";
 
 export default MessageComponent;
 
-function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
-  const { children, ...rest } = props;
+type CodeBlockProps = {
+  node?: any;
+  inline?: boolean;
+  className?: string;
+  children?: React.ReactNode;
+};
+
+function CodeBlock({ node, inline, className, children, ...props }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const preRef = useRef<HTMLPreElement>(null);
 
-  let language = "";
-  const codeChild = React.Children.toArray(children).find(
-    (child): child is React.ReactElement =>
-      React.isValidElement(child) &&
-      (child as React.ReactElement).type === "code",
-  );
-  if (codeChild) {
-    const cls =
-      (codeChild.props as { className?: string }).className || "";
-    const match = cls.match(/language-(\w+)/);
-    if (match) language = match[1];
-  }
+  const raw = Array.isArray(children) ? children.join("") : String(children ?? "");
+  const looksMultiline = /[\r\n]/.test(raw);
+  const inlineDetected = inline || (node && node.type === "inlineCode");
+  const shouldInline = inlineDetected || !looksMultiline;
 
   useEffect(() => {
     return () => {
@@ -167,11 +165,26 @@ function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
     };
   }, []);
 
+  if (shouldInline) {
+    return (
+      <code
+        className={twMerge(
+          "whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.9em]",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+      </code>
+    );
+  }
+
+  const match = /language-(\w+)/.exec(className || "");
+  const language = match ? match[1] : "text";
+
   const handleCopy = async () => {
-    const text = preRef.current?.textContent || "";
-    if (!text.trim()) return;
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(raw);
       setCopied(true);
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => setCopied(false), 2000);
@@ -181,18 +194,20 @@ function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
   };
 
   return (
-    <div className="not-prose my-3 overflow-hidden rounded-lg border border-border">
-      <div className="flex items-center justify-between bg-accent/60 px-3 py-1.5">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-          {language || "code"}
-        </span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          title={copied ? "Copied!" : "Copy code"}
-          className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          {copied ? (
+    <div className="not-prose group relative my-3">
+      {language && language !== "text" && (
+        <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-gray-400">
+          {language}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={handleCopy}
+        title={copied ? "Copied!" : "Copy code"}
+        className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-md border border-gray-600 bg-gray-700/80 px-2 py-1 text-xs text-white opacity-0 transition-opacity hover:bg-gray-700 focus:opacity-100 group-hover:opacity-100"
+      >
+        {copied ? (
+          <>
             <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
               <path
                 fillRule="evenodd"
@@ -200,7 +215,10 @@ function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
                 clipRule="evenodd"
               />
             </svg>
-          ) : (
+            Copied!
+          </>
+        ) : (
+          <>
             <svg
               className="h-3.5 w-3.5"
               viewBox="0 0 24 24"
@@ -213,39 +231,77 @@ function CodeBlock(props: React.ComponentPropsWithoutRef<"pre">) {
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
               <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
             </svg>
-          )}
-          {copied ? "Copied!" : "Copy"}
-        </button>
-      </div>
-      <pre
-        ref={preRef}
-        {...rest}
-        className="m-0 overflow-x-auto rounded-none border-0 bg-muted p-3 text-[0.8125rem] leading-[1.7]"
+            Copy
+          </>
+        )}
+      </button>
+      <SyntaxHighlighter
+        language={language}
+        style={oneDark}
+        customStyle={{
+          margin: 0,
+          borderRadius: "0.5rem",
+          fontSize: "0.875rem",
+          padding: language && language !== "text" ? "2rem 1rem 1rem 1rem" : "1rem",
+        }}
+        codeTagProps={{
+          style: {
+            fontFamily: '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          },
+        }}
       >
-        {children}
-      </pre>
+        {raw}
+      </SyntaxHighlighter>
     </div>
   );
 }
 
-const sanitizeSchema = {
-  ...defaultSchema,
-  attributes: {
-    ...defaultSchema.attributes,
-    code: [...(defaultSchema.attributes?.code ?? []), "className"],
-  },
+const markdownComponents = {
+  code: CodeBlock,
+  blockquote: ({ children }: { children?: React.ReactNode }) => (
+    <blockquote className="my-2 border-l-4 border-primary/40 pl-4 italic text-muted-foreground">
+      {children}
+    </blockquote>
+  ),
+  a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
+    <a
+      href={href}
+      className="text-primary hover:underline"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {children}
+    </a>
+  ),
+  p: ({ children }: { children?: React.ReactNode }) => (
+    <div className="mb-2 last:mb-0">{children}</div>
+  ),
+  table: ({ children }: { children?: React.ReactNode }) => (
+    <div className="my-2 overflow-x-auto">
+      <table className="min-w-full border-collapse border border-border">{children}</table>
+    </div>
+  ),
+  thead: ({ children }: { children?: React.ReactNode }) => (
+    <thead className="bg-accent">{children}</thead>
+  ),
+  th: ({ children }: { children?: React.ReactNode }) => (
+    <th className="border border-border px-3 py-2 text-left text-sm font-semibold">{children}</th>
+  ),
+  td: ({ children }: { children?: React.ReactNode }) => (
+    <td className="border border-border px-3 py-2 align-top text-sm">{children}</td>
+  ),
 };
 
 function MarkdownContent({ content }: { content: string }) {
   if (content === "__FORCE_RENDER_ERROR__") {
     throw new Error("Forced render error for testing");
   }
+  const remarkPlugins = useMemo(() => [remarkGfm, remarkBreaks], []);
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
-      rehypePlugins={[[rehypeSanitize, sanitizeSchema]]}
-      className="prose prose-sm max-w-none dark:prose-invert prose-code:text-sm prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2"
-      components={{ pre: CodeBlock }}
+      remarkPlugins={remarkPlugins}
+      className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2"
+      components={markdownComponents as any}
     >
       {content}
     </ReactMarkdown>
