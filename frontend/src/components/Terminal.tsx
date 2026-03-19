@@ -55,7 +55,6 @@ export default function Terminal({ visible }: { visible: boolean }) {
     ws.onopen = () => {
       term.onData((d) => ws.send(new TextEncoder().encode(d)));
       sendResize();
-      ws.send(new TextEncoder().encode("claude --resume\r"));
     };
 
     ws.onmessage = (e) => term.write(new Uint8Array(e.data as ArrayBuffer));

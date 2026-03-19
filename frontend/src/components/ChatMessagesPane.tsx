@@ -156,7 +156,7 @@ export default function ChatMessagesPane({
         className="flex flex-1 items-center justify-center overflow-y-auto"
       >
         <p className="fade-in text-lg font-semibold text-foreground">
-          Welcome back
+          Welcome back!
         </p>
       </div>
     );

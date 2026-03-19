@@ -10,15 +10,14 @@ const MODEL_OPTIONS = [
   { value: "opus[1m]", label: "Opus [1m]" },
 ];
 
-function displayLabel(model: string | null): string {
-  if (!model) return "Model";
+function displayLabel(model: string): string {
   const opt = MODEL_OPTIONS.find((o) => o.value === model);
   return opt ? opt.label : model;
 }
 
 export default function ModelChip() {
   const { csrfToken } = useSse();
-  const [model, setModel] = useState<string | null>(null);
+  const [model, setModel] = useState("sonnet");
   const [open, setOpen] = useState(false);
   const [saveResult, setSaveResult] = useState<"success" | "error" | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -28,7 +27,7 @@ export default function ModelChip() {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((data) => {
-        if (!cancelled) setModel(data.model ?? null);
+        if (!cancelled) setModel(data.model ?? "sonnet");
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -75,7 +74,7 @@ export default function ModelChip() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 rounded-xl border border-border bg-card p-1.5 shadow-xl">
+        <div className="absolute bottom-full right-0 z-50 mb-1 rounded-xl border border-border bg-card p-1.5 shadow-xl">
           <div className="flex flex-col gap-0.5" style={{ minWidth: "130px" }}>
             {MODEL_OPTIONS.map((opt) => (
               <button
