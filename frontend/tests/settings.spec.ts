@@ -120,4 +120,51 @@ test.describe("settings", () => {
     await expect(page.getByText(/AWS Bedrock/)).toBeVisible();
     await expect(page.getByText("Base URL:")).not.toBeVisible();
   });
+
+  test("UF-32 model selector shows current model from settings", async ({ page }) => {
+    await setupApp(page, {
+      settings: { uses_bedrock: false, has_api_key: false, base_url: null, model: "opus" },
+    });
+
+    await page.getByTitle("Settings").click();
+
+    // The Opus button should be highlighted (selected)
+    const opusButton = page.getByRole("button", { name: "Opus", exact: true });
+    await expect(opusButton).toBeVisible();
+    await expect(opusButton).toHaveClass(/bg-primary/);
+  });
+
+  test("UF-33 changing model sends PUT with new model value", async ({ page }) => {
+    const ctrl = await setupApp(page, {
+      settings: { uses_bedrock: false, has_api_key: false, base_url: null, model: "sonnet" },
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByRole("button", { name: "Haiku", exact: true }).click();
+
+    await expect(page.getByText("Model updated.")).toBeVisible();
+    expect(ctrl.lastSettingsSave()?.model).toBe("haiku");
+  });
+
+  test("UF-34 model selector visible in bedrock mode too", async ({ page }) => {
+    await setupApp(page, {
+      settings: { uses_bedrock: true, has_api_key: false, base_url: null, model: "sonnet" },
+    });
+
+    await page.getByTitle("Settings").click();
+
+    await expect(page.getByText("Model")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sonnet", exact: true })).toBeVisible();
+  });
+
+  test("UF-35 shows success message after model change", async ({ page }) => {
+    await setupApp(page, {
+      settings: { uses_bedrock: false, has_api_key: false, base_url: null, model: "sonnet" },
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByRole("button", { name: "Opus", exact: true }).click();
+
+    await expect(page.getByText("Model updated.")).toBeVisible();
+  });
 });

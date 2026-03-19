@@ -154,6 +154,7 @@ export interface SettingsData {
   uses_bedrock: boolean;
   has_api_key: boolean;
   base_url: string | null;
+  model: string | null;
 }
 
 // ── App HTML ──────────────────────────────────────────────────────────────
@@ -210,7 +211,7 @@ export interface AppController {
   /** Body of the most recent POST /chat-question-answer, or null. */
   lastAnswerBody(): { task_id: string; request_id: string; answers: Record<string, string> } | null;
   /** Body of the most recent PUT /api/settings, or null. */
-  lastSettingsSave(): { api_key: string } | null;
+  lastSettingsSave(): { api_key?: string; model?: string } | null;
   /** Whether an upload POST was received. */
   uploadReceived(): boolean;
   /** Raw form body of the most recent POST /rootfs/delete, or null. */
@@ -253,6 +254,7 @@ export async function setupApp(
     uses_bedrock: false,
     has_api_key: false,
     base_url: null,
+    model: "sonnet",
     ...opts.settings,
   };
 
@@ -260,7 +262,7 @@ export async function setupApp(
   let stopReceived = false;
   let lastStopBody: { task_id: string } | null = null;
   let lastAnswer: { task_id: string; request_id: string; answers: Record<string, string> } | null = null;
-  let lastSettingsSaveBody: { api_key: string } | null = null;
+  let lastSettingsSaveBody: { api_key?: string; model?: string } | null = null;
   let uploadWasReceived = false;
   let lastResetBody: string | null = null;
   let chatResponseToken: string | null = null;
@@ -354,7 +356,7 @@ export async function setupApp(
       if (opts.settingsSaveError) {
         await route.fulfill({ status: 500, body: "Internal Server Error" });
       } else {
-        lastSettingsSaveBody = route.request().postDataJSON() as { api_key: string };
+        lastSettingsSaveBody = route.request().postDataJSON() as { api_key?: string; model?: string };
         await route.fulfill({ status: 200, body: "" });
       }
     } else {

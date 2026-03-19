@@ -3,7 +3,7 @@ use axum::{
     extract::State,
     response::{IntoResponse, Response},
 };
-use chat_settings::{build_api_key_settings_json, get_vm_settings, set_vm_settings};
+use chat_settings::{build_api_key_settings_json, get_vm_settings, get_vm_settings_raw, set_vm_settings};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -16,20 +16,13 @@ pub(crate) struct SettingsResponse {
     uses_bedrock: bool,
     has_api_key: bool,
     base_url: Option<String>,
+    model: Option<String>,
 }
 
 pub(crate) async fn get_settings_handler(
     user_vm: UserVm,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    if state.config.use_iam_creds {
-        return Ok(Json(SettingsResponse {
-            uses_bedrock: true,
-            has_api_key: false,
-            base_url: state.config.anthropic_base_url.clone(),
-        })
-        .into_response());
-    }
     let vm_settings = get_vm_settings(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
@@ -38,16 +31,18 @@ pub(crate) async fn get_settings_handler(
     )
     .await?;
     Ok(Json(SettingsResponse {
-        uses_bedrock: vm_settings.uses_bedrock,
-        has_api_key: vm_settings.has_api_key,
+        uses_bedrock: if state.config.use_iam_creds { true } else { vm_settings.uses_bedrock },
+        has_api_key: if state.config.use_iam_creds { false } else { vm_settings.has_api_key },
         base_url: state.config.anthropic_base_url.clone(),
+        model: vm_settings.model,
     })
     .into_response())
 }
 
 #[derive(Deserialize)]
 pub(crate) struct SetSettingsBody {
-    api_key: String,
+    api_key: Option<String>,
+    model: Option<String>,
 }
 
 pub(crate) async fn put_settings_handler(
@@ -55,23 +50,47 @@ pub(crate) async fn put_settings_handler(
     State(state): State<AppState>,
     Json(body): Json<SetSettingsBody>,
 ) -> Result<Response, AppError> {
-    if state.config.use_iam_creds {
-        return Ok(Json("API key not applicable in Bedrock mode").into_response());
+    if let Some(api_key) = &body.api_key {
+        if state.config.use_iam_creds {
+            return Ok(Json("API key not applicable in Bedrock mode").into_response());
+        }
+        let content = build_api_key_settings_json(
+            api_key,
+            state.config.anthropic_base_url.as_deref(),
+            &state.config.anthropic_default_haiku_model,
+            &state.config.anthropic_default_sonnet_model,
+            &state.config.anthropic_default_opus_model,
+            body.model.as_deref(),
+        );
+        set_vm_settings(
+            user_vm.guest_ip,
+            &state.config.ssh_key_path,
+            &state.config.ssh_user,
+            &state.config.vm_host_key_path,
+            &content,
+        )
+        .await?;
+    } else if let Some(model) = &body.model {
+        // Model-only update: read current settings, patch the model field, write back
+        let raw = get_vm_settings_raw(
+            user_vm.guest_ip,
+            &state.config.ssh_key_path,
+            &state.config.ssh_user,
+            &state.config.vm_host_key_path,
+        )
+        .await?;
+        let mut settings: serde_json::Value = serde_json::from_str(raw.trim())
+            .unwrap_or_else(|_| serde_json::json!({}));
+        settings["model"] = serde_json::Value::String(model.clone());
+        let content = settings.to_string();
+        set_vm_settings(
+            user_vm.guest_ip,
+            &state.config.ssh_key_path,
+            &state.config.ssh_user,
+            &state.config.vm_host_key_path,
+            &content,
+        )
+        .await?;
     }
-    let content = build_api_key_settings_json(
-        &body.api_key,
-        state.config.anthropic_base_url.as_deref(),
-        &state.config.anthropic_default_haiku_model,
-        &state.config.anthropic_default_sonnet_model,
-        &state.config.anthropic_default_opus_model,
-    );
-    set_vm_settings(
-        user_vm.guest_ip,
-        &state.config.ssh_key_path,
-        &state.config.ssh_user,
-        &state.config.vm_host_key_path,
-        &content,
-    )
-    .await?;
     Ok(Json("").into_response())
 }

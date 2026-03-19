@@ -13,6 +13,7 @@ const CHANNEL_WAIT_TIMEOUT_SECS: u64 = 30;
 pub struct VmSettings {
     pub has_api_key: bool,
     pub uses_bedrock: bool,
+    pub model: Option<String>,
 }
 
 pub fn build_api_key_settings_json(
@@ -21,6 +22,7 @@ pub fn build_api_key_settings_json(
     haiku_model: &str,
     sonnet_model: &str,
     opus_model: &str,
+    model: Option<&str>,
 ) -> String {
     let mut env = serde_json::json!({
         "ANTHROPIC_AUTH_TOKEN": api_key,
@@ -32,12 +34,15 @@ pub fn build_api_key_settings_json(
     if let Some(url) = base_url {
         env["ANTHROPIC_BASE_URL"] = serde_json::Value::String(url.to_string());
     }
-    serde_json::json!({
+    let mut settings = serde_json::json!({
         "$schema": "https://json.schemastore.org/claude-code-settings.json",
         "env": env,
         "skipWebFetchPreflight": true,
-    })
-    .to_string()
+    });
+    if let Some(m) = model {
+        settings["model"] = serde_json::Value::String(m.to_string());
+    }
+    settings.to_string()
 }
 
 pub async fn get_vm_settings(
@@ -46,6 +51,16 @@ pub async fn get_vm_settings(
     ssh_user: &str,
     vm_host_key_path: &Path,
 ) -> Result<VmSettings> {
+    let raw = get_vm_settings_raw(guest_ip, ssh_key_path, ssh_user, vm_host_key_path).await?;
+    parse_vm_settings(raw.trim())
+}
+
+pub async fn get_vm_settings_raw(
+    guest_ip: Ipv4Addr,
+    ssh_key_path: &Path,
+    ssh_user: &str,
+    vm_host_key_path: &Path,
+) -> Result<String> {
     let mut ssh_handle = connect_ssh(guest_ip, ssh_key_path, ssh_user, vm_host_key_path).await?;
     let mut channel = open_exec_channel(&mut ssh_handle, GET_SETTINGS_CMD).await?;
     let mut stdout = String::new();
@@ -64,7 +79,7 @@ pub async fn get_vm_settings(
             Err(_) => return Err(anyhow!("SSH channel read timed out")),
         }
     }
-    parse_vm_settings(stdout.trim())
+    Ok(stdout)
 }
 
 fn parse_vm_settings(stdout: &str) -> Result<VmSettings> {
@@ -80,6 +95,10 @@ fn parse_vm_settings(stdout: &str) -> Result<VmSettings> {
             .and_then(|v| v.get("CLAUDE_CODE_USE_BEDROCK"))
             .and_then(|v| v.as_str())
             .is_some_and(|s| s == "1" || s.eq_ignore_ascii_case("true")),
+        model: settings
+            .get("model")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
     })
 }
 

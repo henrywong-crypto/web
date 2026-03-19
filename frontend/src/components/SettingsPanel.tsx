@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Check, Key, X } from "lucide-react";
+import { Check, Key, Cpu, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 
 interface SettingsData {
   uses_bedrock: boolean;
   has_api_key: boolean;
   base_url: string | null;
+  model: string | null;
 }
 
 interface SettingsPanelProps {
@@ -21,6 +22,7 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
   const [saveResult, setSaveResult] = useState<"success" | "error" | null>(
     null,
   );
+  const [modelSaveResult, setModelSaveResult] = useState<"success" | "error" | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadSettings = useCallback(async (signal?: AbortSignal) => {
@@ -69,6 +71,26 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
     }
   }, [apiKey, csrfToken, loadSettings]);
 
+  const handleModelChange = useCallback(async (model: string) => {
+    if (!settings) return;
+    setSettings({ ...settings, model });
+    setModelSaveResult(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        body: JSON.stringify({ model }),
+      });
+      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+      setModelSaveResult("success");
+    } catch {
+      setModelSaveResult("error");
+    }
+  }, [settings, csrfToken]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
@@ -99,6 +121,11 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
             </div>
           ) : settings ? (
             <div className="space-y-4">
+              <ModelSelector
+                currentModel={settings.model}
+                onModelChange={handleModelChange}
+                saveResult={modelSaveResult}
+              />
               {settings.uses_bedrock ? (
                 <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                   Using AWS Bedrock credentials (IAM-managed)
@@ -182,6 +209,54 @@ function ApiKeySection({
         <p className="text-sm text-red-400">
           Failed to save. Please try again.
         </p>
+      )}
+    </div>
+  );
+}
+
+const MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "haiku", label: "Haiku" },
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+  { value: "sonnet[1m]", label: "Sonnet [1m]" },
+  { value: "opus[1m]", label: "Opus [1m]" },
+];
+
+function ModelSelector({
+  currentModel,
+  onModelChange,
+  saveResult,
+}: {
+  currentModel: string | null;
+  onModelChange: (model: string) => void;
+  saveResult: "success" | "error" | null;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Cpu className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium text-foreground">Model</span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {MODEL_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => onModelChange(opt.value)}
+            className={
+              currentModel === opt.value
+                ? "rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                : "rounded-lg border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            }
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {saveResult === "success" && (
+        <p className="text-sm text-emerald-500">Model updated.</p>
+      )}
+      {saveResult === "error" && (
+        <p className="text-sm text-red-400">Failed to update model.</p>
       )}
     </div>
   );
