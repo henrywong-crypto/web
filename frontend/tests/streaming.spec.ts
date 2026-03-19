@@ -39,7 +39,10 @@ test.describe("streaming", () => {
 
     // The assistant response is shown
     await expect(page.getByText("The answer is 42.")).toBeVisible();
-    // Thinking content IS visible in the chat
+    // Thinking block is visible as a collapsible section
+    await expect(page.getByText("Thinking")).toBeVisible();
+    // Expand the thinking block to see the content
+    await page.getByText("Thinking").click();
     await expect(page.getByText("My reasoning here…")).toBeVisible();
   });
 

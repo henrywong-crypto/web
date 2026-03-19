@@ -79,9 +79,14 @@ const MessageComponent = memo(
       if (!message.content) return null;
       return (
         <div className={insideCard ? "py-0.5" : "px-4 py-0.5"}>
-          <div className="text-sm italic text-muted-foreground/70 leading-relaxed">
-            {message.content}
-          </div>
+          <details className="group rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+            <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground">
+              Thinking
+            </summary>
+            <div className="mt-2 whitespace-pre-wrap text-sm italic text-muted-foreground leading-relaxed">
+              {message.content}
+            </div>
+          </details>
         </div>
       );
     }
