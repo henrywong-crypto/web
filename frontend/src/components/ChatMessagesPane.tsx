@@ -156,9 +156,6 @@ export default function ChatMessagesPane({
         className="flex flex-1 items-center justify-center overflow-y-auto"
       >
         <div className="fade-in flex flex-col items-center text-center">
-          <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-bold tracking-wider text-primary-foreground shadow-sm">
-            AI
-          </div>
           <p className="text-lg font-semibold text-foreground">
             What can I help with?
           </p>

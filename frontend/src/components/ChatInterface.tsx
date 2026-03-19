@@ -265,6 +265,7 @@ export default function ChatInterface({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ChatMessagesPane
+        key={viewConversationId ?? "empty"}
         messages={messages}
         isLoading={isCurrentRunning}
         autoScrollToBottom={preferences?.autoScrollToBottom}
