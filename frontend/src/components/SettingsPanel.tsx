@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Check, Key, Cpu, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
+import type { UiPreferences } from "../hooks/useUiPreferences";
 
 interface SettingsData {
   uses_bedrock: boolean;
@@ -11,9 +12,11 @@ interface SettingsData {
 
 interface SettingsPanelProps {
   onClose: () => void;
+  preferences: UiPreferences;
+  onTogglePreference: <K extends keyof UiPreferences>(key: K, value: UiPreferences[K]) => void;
 }
 
-export default function SettingsPanel({ onClose }: SettingsPanelProps) {
+export default function SettingsPanel({ onClose, preferences, onTogglePreference }: SettingsPanelProps) {
   const { csrfToken } = useSse();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -151,10 +154,45 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
             </div>
           ) : null}
         </div>
+
+        {/* Quick Settings section */}
+        <div className="border-t border-border p-4">
+          <h3 className="mb-3 text-sm font-semibold text-foreground">Quick Settings</h3>
+          <div className="space-y-1">
+            {QUICK_TOGGLES.map((t) => (
+              <label key={t.key} className="flex items-center justify-between rounded-lg px-2 py-2.5">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{t.label}</div>
+                  <div className="text-xs text-muted-foreground">{t.description}</div>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={preferences[t.key]}
+                  onClick={() => onTogglePreference(t.key, !preferences[t.key])}
+                  className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+                    preferences[t.key] ? "bg-primary" : "bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                      preferences[t.key] ? "translate-x-4" : "translate-x-0.5"
+                    }`}
+                  />
+                </button>
+              </label>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
+
+const QUICK_TOGGLES: { key: keyof UiPreferences; label: string; description: string }[] = [
+  { key: "autoExpandTools", label: "Auto-expand tools", description: "Expand tool cards by default" },
+  { key: "showThinking", label: "Show thinking", description: "Show thinking blocks" },
+  { key: "autoScrollToBottom", label: "Auto-scroll", description: "Scroll to bottom on new messages" },
+];
 
 function ApiKeySection({
   hasApiKey,

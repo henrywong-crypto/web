@@ -8,7 +8,6 @@ import Terminal from "./components/Terminal";
 import FileManager from "./components/FileManager";
 import MobileNav from "./components/MobileNav";
 import SettingsPanel from "./components/SettingsPanel";
-import QuickSettingsPanel from "./components/QuickSettingsPanel";
 import { useUiPreferences } from "./hooks/useUiPreferences";
 import type { Conversation, ViewTab } from "./types";
 
@@ -60,9 +59,9 @@ function AppContent() {
   >(new Set());
   const [newChatKey, setNewChatKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const [showQuickSettings, setShowQuickSettings] = useState(false);
   const { preferences, setPreference } = useUiPreferences();
   const [showFiles, setShowFiles] = useState(true);
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem("ui-theme");
     return saved ? saved === "dark" : true;
@@ -112,7 +111,6 @@ function AppContent() {
         hasUserRootfs={hasUserRootfs}
         csrfToken={csrfToken}
         onSettingsOpen={() => setShowSettings(true)}
-        onQuickSettingsOpen={() => setShowQuickSettings(true)}
         darkMode={darkMode}
         onToggleDarkMode={toggleDarkMode}
       />
@@ -122,12 +120,17 @@ function AppContent() {
           conversations={conversations}
           viewConversationId={selectedConversation?.conversationId ?? null}
           runningConversationIds={runningConversationIds}
-          onSelectConversation={setSelectedConversation}
+          onSelectConversation={(conv) => {
+            setSelectedConversation(conv);
+            setShowMobileSidebar(false);
+          }}
           onNewChat={handleNewChat}
           onDeleteConversation={handleDeleteConversation}
           onRefresh={() => {
             syncConversationsFromHistory().catch(console.error);
           }}
+          mobileOpen={showMobileSidebar}
+          onMobileClose={() => setShowMobileSidebar(false)}
         />
       )}
 
@@ -138,6 +141,7 @@ function AppContent() {
             newChatKey={newChatKey}
             onRunningConversationChange={setRunningConversationIds}
             onConversationCreated={setSelectedConversation}
+            preferences={preferences}
           />
         )}
         <div
@@ -148,14 +152,14 @@ function AppContent() {
             <Terminal visible={activeTab === "terminal"} />
           </div>
           {showFiles ? (
-            <div className="flex min-h-0 w-80 flex-col border-l border-border/40">
+            <div className="hidden min-h-0 w-80 flex-col border-l border-border/40 md:flex">
               <FileManager onClose={() => setShowFiles(false)} />
             </div>
           ) : (
             <button
               title="Show files"
               onClick={() => setShowFiles(true)}
-              className="flex w-8 flex-col items-center justify-center border-l border-border/40 bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="hidden w-8 flex-col items-center justify-center border-l border-border/40 bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex"
             >
               <FolderOpen className="h-4 w-4" />
             </button>
@@ -163,16 +167,15 @@ function AppContent() {
         </div>
       </main>
 
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          preferences={preferences}
+          onTogglePreference={setPreference}
+        />
+      )}
 
-      <QuickSettingsPanel
-        open={showQuickSettings}
-        onClose={() => setShowQuickSettings(false)}
-        preferences={preferences}
-        onToggle={setPreference}
-      />
-
-      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
+      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} onToggleSidebar={() => setShowMobileSidebar((v) => !v)} />
     </div>
   );
 }

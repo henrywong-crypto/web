@@ -10,6 +10,8 @@ interface SidebarProps {
   onNewChat: () => void;
   onDeleteConversation: (conversation: Conversation) => void;
   onRefresh: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 export default function Sidebar({
@@ -20,6 +22,8 @@ export default function Sidebar({
   onNewChat,
   onDeleteConversation,
   onRefresh,
+  mobileOpen,
+  onMobileClose,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -29,8 +33,28 @@ export default function Sidebar({
       c.title?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
+  const handleSelect = (conversation: Conversation) => {
+    onSelectConversation(conversation);
+    onMobileClose?.();
+  };
+
   return (
-    <div className="hidden w-60 flex-col border-r border-border bg-card md:flex">
+    <>
+      {/* Mobile overlay backdrop */}
+      {mobileOpen && (
+        <div
+          data-testid="sidebar-backdrop"
+          className="fixed inset-0 z-50 bg-black/50 md:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+
+      <div
+        className={`
+          ${mobileOpen ? "fixed inset-y-0 left-0 z-50 flex w-full max-w-xs flex-col bg-card" : "hidden"}
+          md:relative md:flex md:w-60 md:flex-col md:border-r md:border-border md:bg-card
+        `}
+      >
       <div className="flex h-11 items-center justify-between border-b border-border px-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Conversations
@@ -77,7 +101,7 @@ export default function Sidebar({
               isRunning={runningConversationIds.has(
                 conversation.conversationId,
               )}
-              onSelect={() => onSelectConversation(conversation)}
+              onSelect={() => handleSelect(conversation)}
               onDelete={() => onDeleteConversation(conversation)}
             />
           ))
@@ -94,6 +118,7 @@ export default function Sidebar({
         </button>
       </div>
     </div>
+    </>
   );
 }
 

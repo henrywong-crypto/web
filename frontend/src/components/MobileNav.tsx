@@ -1,13 +1,14 @@
 import React from "react";
-import { MessageSquare, Terminal } from "lucide-react";
+import { Clock, MessageSquare, Terminal } from "lucide-react";
 import type { ViewTab } from "../types";
 
 interface MobileNavProps {
   activeTab: ViewTab;
   onTabChange: (tab: ViewTab) => void;
+  onToggleSidebar?: () => void;
 }
 
-export default function MobileNav({ activeTab, onTabChange }: MobileNavProps) {
+export default function MobileNav({ activeTab, onTabChange, onToggleSidebar }: MobileNavProps) {
   return (
     <div
       data-testid="mobile-nav"
@@ -24,6 +25,13 @@ export default function MobileNav({ activeTab, onTabChange }: MobileNavProps) {
       >
         <MessageSquare className="h-5 w-5" />
         <span>Chat</span>
+      </button>
+      <button
+        onClick={() => onToggleSidebar?.()}
+        className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-muted-foreground"
+      >
+        <Clock className="h-5 w-5" />
+        <span>History</span>
       </button>
       <button
         onClick={() => onTabChange("terminal")}

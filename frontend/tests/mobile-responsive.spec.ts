@@ -5,7 +5,7 @@
  * MR-04  On wide viewport, sidebar visible and bottom nav hidden
  */
 import { test, expect } from "@playwright/test";
-import { setupApp } from "./helpers/setup";
+import { setupApp, makeConversation } from "./helpers/setup";
 
 test.describe("mobile responsive", () => {
   test("MR-01 on narrow viewport, sidebar is hidden by default", async ({ page }) => {
@@ -23,6 +23,7 @@ test.describe("mobile responsive", () => {
     const mobileNav = page.locator("[data-testid='mobile-nav']");
     await expect(mobileNav).toBeVisible();
     await expect(mobileNav.getByText("Chat")).toBeVisible();
+    await expect(mobileNav.getByText("History")).toBeVisible();
     await expect(mobileNav.getByText("Terminal")).toBeVisible();
   });
 
@@ -53,5 +54,39 @@ test.describe("mobile responsive", () => {
     await expect(page.getByText("Conversations", { exact: true })).toBeVisible();
     // Bottom nav not visible
     await expect(page.locator("[data-testid='mobile-nav']")).not.toBeVisible();
+  });
+
+  test("MR-05 tapping History opens sidebar overlay showing conversations", async ({ page }) => {
+    const conv = makeConversation({ title: "Test conversation" });
+    await page.setViewportSize({ width: 375, height: 667 });
+    await setupApp(page, { conversations: [conv] });
+
+    // Sidebar should be hidden initially
+    await expect(page.getByText("Conversations", { exact: true })).not.toBeVisible();
+
+    // Tap History button
+    const mobileNav = page.locator("[data-testid='mobile-nav']");
+    await mobileNav.getByText("History").click();
+
+    // Sidebar overlay should now be visible with the conversation
+    await expect(page.getByText("Conversations", { exact: true })).toBeVisible();
+    await expect(page.getByText("Test conversation")).toBeVisible();
+  });
+
+  test("MR-06 selecting a conversation in mobile sidebar closes it", async ({ page }) => {
+    const conv = makeConversation({ title: "Pick me" });
+    await page.setViewportSize({ width: 375, height: 667 });
+    await setupApp(page, { conversations: [conv] });
+
+    // Open sidebar
+    const mobileNav = page.locator("[data-testid='mobile-nav']");
+    await mobileNav.getByText("History").click();
+    await expect(page.getByText("Pick me")).toBeVisible();
+
+    // Select the conversation
+    await page.getByText("Pick me").click();
+
+    // Sidebar should close
+    await expect(page.getByText("Conversations", { exact: true })).not.toBeVisible();
   });
 });

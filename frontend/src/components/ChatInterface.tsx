@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, Conversation } from "../types";
+import type { UiPreferences } from "../hooks/useUiPreferences";
 import { useSse } from "../contexts/SseContext";
 import { useChatState } from "../hooks/useChatState";
 import { useSseHandlers } from "../hooks/useSseHandlers";
@@ -14,6 +15,7 @@ interface ChatInterfaceProps {
   newChatKey?: number;
   onRunningConversationChange?: (runningIds: Set<string>) => void;
   onConversationCreated?: (conversation: Conversation) => void;
+  preferences?: UiPreferences;
 }
 
 export default function ChatInterface({
@@ -21,6 +23,7 @@ export default function ChatInterface({
   newChatKey = 0,
   onRunningConversationChange,
   onConversationCreated,
+  preferences,
 }: ChatInterfaceProps) {
   const sseCtx = useSse();
   const {
@@ -261,7 +264,13 @@ export default function ChatInterface({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ChatMessagesPane messages={messages} isLoading={isCurrentRunning} />
+      <ChatMessagesPane
+        messages={messages}
+        isLoading={isCurrentRunning}
+        autoScrollToBottom={preferences?.autoScrollToBottom}
+        showThinking={preferences?.showThinking}
+        autoExpandTools={preferences?.autoExpandTools}
+      />
       <div className="mx-auto w-full max-w-3xl">
         <ClaudeStatus isLoading={isCurrentRunning} streamPhase={streamPhase} onAbort={handleStop} />
       </div>

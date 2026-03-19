@@ -2,6 +2,7 @@ import React, { memo, useMemo, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { twMerge } from "tailwind-merge";
@@ -13,10 +14,12 @@ interface MessageComponentProps {
   message: ChatMessage;
   prevMessage: ChatMessage | null;
   insideCard?: boolean;
+  showThinking?: boolean;
+  autoExpandTools?: boolean;
 }
 
 const MessageComponent = memo(
-  ({ message, prevMessage, insideCard }: MessageComponentProps) => {
+  ({ message, prevMessage, insideCard, showThinking, autoExpandTools }: MessageComponentProps) => {
     const isGrouped =
       prevMessage !== null &&
       prevMessage.type === message.type &&
@@ -76,6 +79,7 @@ const MessageComponent = memo(
     }
 
     if (message.type === "assistant" && message.isThinking) {
+      if (showThinking === false) return null;
       if (!message.content) return null;
       return (
         <div className={insideCard ? "py-0.5" : "px-4 py-0.5"}>
@@ -98,6 +102,7 @@ const MessageComponent = memo(
             toolName={message.toolName}
             toolInput={message.toolInput}
             toolResult={message.toolResult}
+            autoExpandTools={autoExpandTools}
           />
         </div>
       );
@@ -326,9 +331,28 @@ function MarkdownContent({ content }: { content: string }) {
     throw new Error("Forced render error for testing");
   }
   const remarkPlugins = useMemo(() => [remarkGfm, remarkBreaks], []);
+  const rehypePlugins = useMemo(
+    () => [
+      [
+        rehypeSanitize,
+        {
+          ...defaultSchema,
+          attributes: {
+            ...defaultSchema.attributes,
+            code: [
+              ...(defaultSchema.attributes?.code ?? []),
+              ["className", /^language-./],
+            ],
+          },
+        },
+      ],
+    ],
+    [],
+  );
   return (
     <ReactMarkdown
       remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins as any}
       className="prose max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2"
       components={markdownComponents as any}
     >

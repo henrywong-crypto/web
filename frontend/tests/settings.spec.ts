@@ -18,7 +18,7 @@ test.describe("settings", () => {
 
     await page.getByTitle("Settings").click();
 
-    await expect(page.getByText("Settings")).toBeVisible();
+    await expect(page.getByText("Settings", { exact: true })).toBeVisible();
     await expect(page.getByText("API Key")).toBeVisible();
   });
 

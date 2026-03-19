@@ -8,6 +8,9 @@ import MessageErrorBoundary from "./MessageErrorBoundary";
 interface ChatMessagesPaneProps {
   messages: ChatMessage[];
   isLoading: boolean;
+  autoScrollToBottom?: boolean;
+  showThinking?: boolean;
+  autoExpandTools?: boolean;
 }
 
 /** A "turn group" is a sequence of assistant + tool messages between user messages. */
@@ -43,7 +46,15 @@ function groupIntoTurns(messages: ChatMessage[]): TurnGroup[] {
   return groups;
 }
 
-const AssistantTurnCard = React.memo(function AssistantTurnCard({ messages }: { messages: ChatMessage[] }) {
+const AssistantTurnCard = React.memo(function AssistantTurnCard({
+  messages,
+  showThinking,
+  autoExpandTools,
+}: {
+  messages: ChatMessage[];
+  showThinking?: boolean;
+  autoExpandTools?: boolean;
+}) {
   const [hovered, setHovered] = useState(false);
   const firstMsg = messages[0];
   const formattedTime = new Date(firstMsg.timestamp).toLocaleTimeString([], {
@@ -82,7 +93,7 @@ const AssistantTurnCard = React.memo(function AssistantTurnCard({ messages }: { 
       <div className="space-y-1">
         {messages.map((msg) => (
           <MessageErrorBoundary key={msg.id}>
-            <MessageComponent message={msg} prevMessage={null} insideCard />
+            <MessageComponent message={msg} prevMessage={null} insideCard showThinking={showThinking} autoExpandTools={autoExpandTools} />
           </MessageErrorBoundary>
         ))}
       </div>
@@ -93,6 +104,9 @@ const AssistantTurnCard = React.memo(function AssistantTurnCard({ messages }: { 
 export default function ChatMessagesPane({
   messages,
   isLoading,
+  autoScrollToBottom,
+  showThinking,
+  autoExpandTools,
 }: ChatMessagesPaneProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
@@ -102,6 +116,7 @@ export default function ChatMessagesPane({
   const turnGroups = useMemo(() => groupIntoTurns(messages), [messages]);
 
   useEffect(() => {
+    if (autoScrollToBottom === false) return;
     if (userScrolledRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
@@ -165,7 +180,7 @@ export default function ChatMessagesPane({
             if (group.kind === "assistant-turn") {
               return (
                 <div key={`turn-${group.messages[0].id}`} className="message-slide-in">
-                  <AssistantTurnCard messages={group.messages} />
+                  <AssistantTurnCard messages={group.messages} showThinking={showThinking} autoExpandTools={autoExpandTools} />
                 </div>
               );
             }
@@ -173,7 +188,7 @@ export default function ChatMessagesPane({
             return (
               <div key={msg.id} className="message-slide-in">
                 <MessageErrorBoundary>
-                  <MessageComponent message={msg} prevMessage={null} />
+                  <MessageComponent message={msg} prevMessage={null} showThinking={showThinking} autoExpandTools={autoExpandTools} />
                 </MessageErrorBoundary>
               </div>
             );

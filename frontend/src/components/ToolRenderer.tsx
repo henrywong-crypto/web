@@ -7,12 +7,14 @@ interface ToolRendererProps {
   toolName: string;
   toolInput: Record<string, unknown>;
   toolResult?: ToolResult;
+  autoExpandTools?: boolean;
 }
 
 export default function ToolRenderer({
   toolName,
   toolInput,
   toolResult,
+  autoExpandTools,
 }: ToolRendererProps) {
   return (
     <div className="my-0.5 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -20,6 +22,7 @@ export default function ToolRenderer({
         toolName={toolName}
         toolInput={toolInput}
         toolResult={toolResult}
+        autoExpandTools={autoExpandTools}
       />
     </div>
   );
@@ -73,15 +76,17 @@ function ToolHeader({
   toolName,
   toolInput,
   toolResult,
+  autoExpandTools,
 }: {
   toolName: string;
   toolInput: Record<string, unknown>;
   toolResult?: ToolResult;
+  autoExpandTools?: boolean;
 }) {
   const diffProps = isEditTool(toolName)
     ? getDiffProps(toolName, toolInput)
     : null;
-  const [open, setOpen] = React.useState(diffProps !== null);
+  const [open, setOpen] = React.useState(autoExpandTools || diffProps !== null);
   const summary = buildSummary(toolName, toolInput);
 
   return (
