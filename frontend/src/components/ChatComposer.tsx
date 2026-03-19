@@ -400,7 +400,7 @@ export default function ChatComposer({
           </div>
         </div>
 
-        <p className="mt-1.5 text-center text-[10px] text-muted-foreground/40">
+        <p className="mt-1.5 text-center text-xs text-muted-foreground/40">
           Enter to send · Shift+Enter for newline
         </p>
       </div>

@@ -269,7 +269,7 @@ function ToolResultView({ result }: { result: ToolResult }) {
       className={`border-t border-border px-3 py-2 ${result.isError ? "bg-destructive/5" : "bg-muted/30"}`}
     >
       {result.isError && (
-        <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-destructive">
+        <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-destructive">
           Error
         </div>
       )}

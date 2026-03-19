@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Check, Key, Cpu, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 import type { UiPreferences } from "../hooks/useUiPreferences";
 
@@ -129,11 +129,7 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
                 onModelChange={handleModelChange}
                 saveResult={modelSaveResult}
               />
-              {settings.uses_bedrock ? (
-                <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                  Using AWS Bedrock credentials (IAM-managed)
-                </div>
-              ) : (
+              {!settings.uses_bedrock && (
                 <ApiKeySection
                   hasApiKey={settings.has_api_key}
                   apiKey={apiKey}
@@ -212,10 +208,9 @@ function ApiKeySection({
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Key className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground">API Key</span>
+        <span className="text-sm font-semibold text-foreground">API Key</span>
         {hasApiKey && (
-          <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-500">
+          <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
             <Check className="h-3 w-3" />
             Set
           </span>
@@ -271,10 +266,7 @@ function ModelSelector({
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Cpu className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-foreground">Model</span>
-      </div>
+      <span className="text-sm font-semibold text-foreground">Model</span>
       <div className="flex flex-wrap gap-1.5">
         {MODEL_OPTIONS.map((opt) => (
           <button

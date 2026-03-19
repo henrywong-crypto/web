@@ -155,13 +155,15 @@ export default function ChatMessagesPane({
         ref={scrollRef}
         className="flex flex-1 items-center justify-center overflow-y-auto"
       >
-        <div className="text-center">
-          <div className="mb-4 text-5xl opacity-10">◈</div>
-          <p className="text-base font-medium text-muted-foreground">
-            Start a new conversation
+        <div className="fade-in flex flex-col items-center text-center">
+          <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-xs font-bold tracking-wider text-primary-foreground shadow-sm">
+            AI
+          </div>
+          <p className="text-lg font-semibold text-foreground">
+            What can I help with?
           </p>
-          <p className="mt-1 text-sm text-muted-foreground/50">
-            Type a message below to begin
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ask anything or use / commands to get started
           </p>
         </div>
       </div>
