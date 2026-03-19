@@ -262,8 +262,52 @@ export default function ChatInterface({
     viewConversationId !== null && isConversationRunning(viewConversationId);
   const streamPhase = chatState.getStreamPhase(viewConversationId);
 
+  // Drag-and-drop for the entire message area
+  const [dragging, setDragging] = useState(false);
+  const [droppedFiles, setDroppedFiles] = useState<File[] | undefined>();
+  const dragCounterRef = useRef(0);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (dragCounterRef.current === 1) setDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) setDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) setDroppedFiles(files);
+  }, []);
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      className="relative flex min-h-0 flex-1 flex-col"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/50 bg-primary/5">
+          <p className="text-sm font-medium text-primary">Drop files to attach</p>
+        </div>
+      )}
       <ChatMessagesPane
         key={viewConversationId ?? "empty"}
         messages={messages}
@@ -292,6 +336,7 @@ export default function ChatInterface({
           onSend={handleSend}
           onStop={handleStop}
           focusKey={composerFocusKey}
+          droppedFiles={droppedFiles}
         />
       )}
     </div>

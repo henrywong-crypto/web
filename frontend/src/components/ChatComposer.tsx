@@ -8,6 +8,7 @@ interface ChatComposerProps {
   onSend: (text: string) => void;
   onStop: () => void;
   focusKey?: number;
+  droppedFiles?: File[];
 }
 
 export default function ChatComposer({
@@ -15,17 +16,16 @@ export default function ChatComposer({
   onSend,
   onStop,
   focusKey,
+  droppedFiles,
 }: ChatComposerProps) {
   const { uploadAction, csrfToken, uploadDir } = useSse();
 
   const [input, setInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [dragging, setDragging] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dragCounterRef = useRef(0);
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
 
   // Clean up object URLs on unmount
@@ -85,36 +85,12 @@ export default function ChatComposer({
     [addFiles],
   );
 
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounterRef.current++;
-    if (dragCounterRef.current === 1) setDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounterRef.current--;
-    if (dragCounterRef.current === 0) setDragging(false);
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dragCounterRef.current = 0;
-      setDragging(false);
-      if (blocked) return;
-      addFiles(Array.from(e.dataTransfer.files));
-    },
-    [blocked, addFiles],
-  );
+  // Consume files dropped onto the parent drag zone
+  useEffect(() => {
+    if (droppedFiles && droppedFiles.length > 0) {
+      addFiles(droppedFiles);
+    }
+  }, [droppedFiles, addFiles]);
 
   const removeFile = useCallback((idx: number) => {
     setPendingFiles((prev) => {
@@ -209,13 +185,7 @@ export default function ChatComposer({
   }, []);
 
   return (
-    <div
-      className="flex-shrink-0 border-t border-border bg-card/60 px-3 pb-3 pt-2"
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
+    <div className="flex-shrink-0 border-t border-border bg-card/60 px-3 pb-3 pt-2">
       <div className="mx-auto max-w-3xl">
         <div className="relative">
           {/* Pending file chips */}
@@ -249,11 +219,7 @@ export default function ChatComposer({
           )}
 
           {/* Input row */}
-          <div className={`flex items-center gap-2 rounded-2xl border bg-background px-3 py-2 shadow-sm transition-colors ${
-            dragging
-              ? "border-primary ring-2 ring-primary/30"
-              : "border-border focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20"
-          }`}>
+          <div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2 shadow-sm focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
             {/* File upload button */}
             <button
               type="button"
