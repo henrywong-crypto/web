@@ -16,6 +16,9 @@ interface ChatInterfaceProps {
   onRunningConversationChange?: (runningIds: Set<string>) => void;
   onConversationCreated?: (conversation: Conversation) => void;
   preferences?: UiPreferences;
+  /** When set, ChatInterface auto-sends this command and clears it. Pair with a changing key (newChatKey) to trigger. */
+  pendingCommand?: string | null;
+  onCommandConsumed?: () => void;
 }
 
 export default function ChatInterface({
@@ -24,6 +27,8 @@ export default function ChatInterface({
   onRunningConversationChange,
   onConversationCreated,
   preferences,
+  pendingCommand,
+  onCommandConsumed,
 }: ChatInterfaceProps) {
   const sseCtx = useSse();
   const {
@@ -209,6 +214,14 @@ export default function ChatInterface({
       sseCtx,
     ],
   );
+
+  // Auto-send pending command from shortcut panel
+  useEffect(() => {
+    if (pendingCommand) {
+      handleSend(pendingCommand);
+      onCommandConsumed?.();
+    }
+  }, [pendingCommand]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleStop = useCallback(() => {
     if (!viewConversationId) return;

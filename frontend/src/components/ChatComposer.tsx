@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, Paperclip, Send, Square, X } from "lucide-react";
+import { Paperclip, Send, Square, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 
 interface ChatComposerProps {
@@ -53,7 +53,6 @@ export default function ChatComposer({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
 
   // Clean up object URLs on unmount
@@ -101,16 +100,7 @@ export default function ChatComposer({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files ?? []);
       setPendingFiles((prev) => [...prev, ...files]);
-      e.target.value = "";
-    },
-    [],
-  );
-
-  const handleImageSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files ?? []);
-      setPendingFiles((prev) => [...prev, ...files]);
-      // Create preview URLs for images
+      // Create preview URLs for any image files
       setImageUrls((prev) => {
         const next = new Map(prev);
         files.forEach((f) => {
@@ -338,25 +328,6 @@ export default function ChatComposer({
               multiple
               className="hidden"
               onChange={handleFileSelect}
-            />
-
-            {/* Image upload button */}
-            <button
-              type="button"
-              title="Attach image"
-              onClick={() => imageInputRef.current?.click()}
-              disabled={blocked}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-            >
-              <ImagePlus className="h-4 w-4" />
-            </button>
-            <input
-              ref={imageInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={handleImageSelect}
             />
 
             <textarea

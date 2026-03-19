@@ -1,5 +1,5 @@
 /**
- * IA-01  Image button exists in composer
+ * IA-01  Attach button exists in composer (single unified button)
  * IA-02  Selecting an image shows preview chip
  * IA-03  Removing an image chip removes it from pending list
  * IA-04  Images uploaded before message sent
@@ -8,17 +8,19 @@ import { test, expect } from "@playwright/test";
 import { setupApp, sendMessage } from "./helpers/setup";
 
 test.describe("image attachment", () => {
-  test("IA-01 image button exists in composer", async ({ page }) => {
+  test("IA-01 attach button exists in composer", async ({ page }) => {
     await setupApp(page, {});
 
-    await expect(page.getByTitle("Attach image")).toBeVisible();
+    await expect(page.getByTitle("Attach file")).toBeVisible();
+    // No separate image button
+    await expect(page.locator('button[title="Attach image"]')).toHaveCount(0);
   });
 
   test("IA-02 selecting an image shows preview chip", async ({ page }) => {
     await setupApp(page, {});
 
-    const imageInput = page.locator('input[type="file"][accept="image/*"]');
-    await imageInput.setInputFiles({
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles({
       name: "photo.png",
       mimeType: "image/png",
       buffer: Buffer.from("fake-image-data"),
@@ -30,8 +32,8 @@ test.describe("image attachment", () => {
   test("IA-03 removing an image chip removes it from pending list", async ({ page }) => {
     await setupApp(page, {});
 
-    const imageInput = page.locator('input[type="file"][accept="image/*"]');
-    await imageInput.setInputFiles({
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles({
       name: "photo.png",
       mimeType: "image/png",
       buffer: Buffer.from("fake-image-data"),
@@ -57,8 +59,8 @@ test.describe("image attachment", () => {
       await route.fulfill({ status: 200, body: "" });
     });
 
-    const imageInput = page.locator('input[type="file"][accept="image/*"]');
-    await imageInput.setInputFiles({
+    const fileInput = page.locator('input[type="file"]').first();
+    await fileInput.setInputFiles({
       name: "photo.png",
       mimeType: "image/png",
       buffer: Buffer.from("fake-image-data"),

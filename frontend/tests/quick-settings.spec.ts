@@ -10,12 +10,13 @@ import { test, expect } from "@playwright/test";
 import { setupApp, sse, sendMessage } from "./helpers/setup";
 
 test.describe("quick settings", () => {
-  test("QS-01 settings panel contains quick settings section", async ({ page }) => {
+  test("QS-01 settings panel contains Preferences tab with toggles", async ({ page }) => {
     await setupApp(page, {});
 
     await page.getByTitle("Settings").click();
 
-    await expect(page.getByText("Quick Settings")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Preferences" })).toBeVisible();
+    await page.getByRole("button", { name: "Preferences" }).click();
     await expect(page.getByText("Auto-scroll")).toBeVisible();
   });
 
@@ -23,6 +24,7 @@ test.describe("quick settings", () => {
     await setupApp(page, {});
 
     await page.getByTitle("Settings").click();
+    await page.getByRole("button", { name: "Preferences" }).click();
 
     // Click the auto-scroll toggle
     const toggle = page.locator("label").filter({ hasText: "Auto-scroll" }).locator("button[role='switch']");
@@ -31,18 +33,19 @@ test.describe("quick settings", () => {
     // Check localStorage
     const prefs = await page.evaluate(() => localStorage.getItem("ui_preferences"));
     const parsed = JSON.parse(prefs!);
-    expect(parsed.autoScrollToBottom).toBe(true);
+    expect(parsed.autoScrollToBottom).toBe(false);
   });
 
-  test("QS-03 closing settings panel hides quick settings", async ({ page }) => {
+  test("QS-03 closing settings panel hides preferences", async ({ page }) => {
     await setupApp(page, {});
 
     await page.getByTitle("Settings").click();
-    await expect(page.getByText("Quick Settings")).toBeVisible();
+    await page.getByRole("button", { name: "Preferences" }).click();
+    await expect(page.getByText("Auto-scroll")).toBeVisible();
 
     // Click the close button
     await page.getByRole("button", { name: /close/i }).or(page.locator("button").filter({ has: page.locator("svg.lucide-x") }).first()).click();
-    await expect(page.getByText("Quick Settings")).not.toBeVisible();
+    await expect(page.getByText("Auto-scroll")).not.toBeVisible();
   });
 
   test("QS-04 toggle states restored from localStorage on reload", async ({ page }) => {
@@ -57,6 +60,7 @@ test.describe("quick settings", () => {
     await setupApp(page, {});
 
     await page.getByTitle("Settings").click();
+    await page.getByRole("button", { name: "Preferences" }).click();
 
     // Auto-expand tools should be on
     const expandToggle = page.locator("label").filter({ hasText: "Auto-expand tools" }).locator("button[role='switch']");

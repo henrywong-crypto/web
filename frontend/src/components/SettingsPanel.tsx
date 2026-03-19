@@ -16,6 +16,8 @@ interface SettingsPanelProps {
   onTogglePreference: <K extends keyof UiPreferences>(key: K, value: UiPreferences[K]) => void;
 }
 
+type Tab = "general" | "preferences";
+
 export default function SettingsPanel({ onClose, preferences, onTogglePreference }: SettingsPanelProps) {
   const { csrfToken } = useSse();
   const [settings, setSettings] = useState<SettingsData | null>(null);
@@ -27,6 +29,7 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
   );
   const [modelSaveResult, setModelSaveResult] = useState<"success" | "error" | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("general");
 
   const loadSettings = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -94,6 +97,11 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
     }
   }, [settings, csrfToken]);
 
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "general", label: "General" },
+    { id: "preferences", label: "Preferences" },
+  ];
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
@@ -113,71 +121,92 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
           </button>
         </div>
 
-        <div className="p-4">
-          {loading ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              Loading…
-            </div>
-          ) : loadError ? (
-            <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-300">
-              {loadError}
-            </div>
-          ) : settings ? (
-            <div className="space-y-4">
-              <ModelSelector
-                currentModel={settings.model}
-                onModelChange={handleModelChange}
-                saveResult={modelSaveResult}
-              />
-              {!settings.uses_bedrock && (
-                <ApiKeySection
-                  hasApiKey={settings.has_api_key}
-                  apiKey={apiKey}
-                  onApiKeyChange={setApiKey}
-                  onSave={handleSave}
-                  saving={saving}
-                  saveResult={saveResult}
-                />
-              )}
-              {!settings.uses_bedrock && settings.base_url && (
-                <div className="text-sm text-muted-foreground">
-                  Base URL:{" "}
-                  <span className="font-mono text-foreground">
-                    {settings.base_url}
-                  </span>
-                </div>
-              )}
-            </div>
-          ) : null}
+        {/* Tabs */}
+        <div className="flex border-b border-border">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex-1 px-4 py-2.5 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? "border-b-2 border-primary text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        {/* Quick Settings section */}
-        <div className="border-t border-border p-4">
-          <h3 className="mb-3 text-sm font-semibold text-foreground">Quick Settings</h3>
-          <div className="space-y-1">
-            {QUICK_TOGGLES.map((t) => (
-              <label key={t.key} className="flex items-center justify-between rounded-lg px-2 py-2.5">
-                <div>
-                  <div className="text-sm font-medium text-foreground">{t.label}</div>
-                  <div className="text-xs text-muted-foreground">{t.description}</div>
+        {/* Tab content */}
+        <div className="p-4">
+          {activeTab === "general" && (
+            <>
+              {loading ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  Loading…
                 </div>
-                <button
-                  role="switch"
-                  aria-checked={preferences[t.key]}
-                  onClick={() => onTogglePreference(t.key, !preferences[t.key])}
-                  className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
-                    preferences[t.key] ? "bg-primary" : "bg-muted"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
-                      preferences[t.key] ? "translate-x-4" : "translate-x-0.5"
-                    }`}
+              ) : loadError ? (
+                <div className="rounded-lg border border-red-500/30 bg-red-950/20 px-3 py-2 text-sm text-red-300">
+                  {loadError}
+                </div>
+              ) : settings ? (
+                <div className="space-y-4">
+                  <ModelSelector
+                    currentModel={settings.model}
+                    onModelChange={handleModelChange}
+                    saveResult={modelSaveResult}
                   />
-                </button>
-              </label>
-            ))}
-          </div>
+                  {!settings.uses_bedrock && (
+                    <ApiKeySection
+                      hasApiKey={settings.has_api_key}
+                      apiKey={apiKey}
+                      onApiKeyChange={setApiKey}
+                      onSave={handleSave}
+                      saving={saving}
+                      saveResult={saveResult}
+                    />
+                  )}
+                  {!settings.uses_bedrock && settings.base_url && (
+                    <div className="text-sm text-muted-foreground">
+                      Base URL:{" "}
+                      <span className="font-mono text-foreground">
+                        {settings.base_url}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {activeTab === "preferences" && (
+            <div className="space-y-1">
+              {QUICK_TOGGLES.map((t) => (
+                <label key={t.key} className="flex items-center justify-between rounded-lg px-2 py-2.5">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">{t.label}</div>
+                    <div className="text-xs text-muted-foreground">{t.description}</div>
+                  </div>
+                  <button
+                    role="switch"
+                    aria-checked={preferences[t.key]}
+                    onClick={() => onTogglePreference(t.key, !preferences[t.key])}
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${
+                      preferences[t.key] ? "bg-primary" : "bg-muted"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                        preferences[t.key] ? "translate-x-4" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

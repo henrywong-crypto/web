@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { FolderOpen } from "lucide-react";
+import { Zap } from "lucide-react";
 import { SseProvider, useSse } from "./contexts/SseContext";
 import IconRail from "./components/IconRail";
 import Sidebar from "./components/Sidebar";
 import ChatInterface from "./components/ChatInterface";
 import Terminal from "./components/Terminal";
 import FileManager from "./components/FileManager";
+import ShortcutPanel from "./components/ShortcutPanel";
 import MobileNav from "./components/MobileNav";
 import SettingsPanel from "./components/SettingsPanel";
 import { useUiPreferences } from "./hooks/useUiPreferences";
@@ -60,7 +61,8 @@ function AppContent() {
   const [newChatKey, setNewChatKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const { preferences, setPreference } = useUiPreferences();
-  const [showFiles, setShowFiles] = useState(true);
+  const [showFilesPanel, setShowFilesPanel] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(true);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem("ui-theme");
@@ -103,6 +105,13 @@ function AppContent() {
     [deleteSession, deleteConversation, selectedConversation],
   );
 
+  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
+
+  const handleSendCommand = useCallback((command: string) => {
+    setActiveTab("chat");
+    setPendingCommand(command);
+  }, []);
+
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <IconRail
@@ -111,6 +120,7 @@ function AppContent() {
         hasUserRootfs={hasUserRootfs}
         csrfToken={csrfToken}
         onSettingsOpen={() => setShowSettings(true)}
+        onFilesOpen={() => setShowFilesPanel(true)}
         darkMode={darkMode}
         onToggleDarkMode={toggleDarkMode}
       />
@@ -142,6 +152,8 @@ function AppContent() {
             onRunningConversationChange={setRunningConversationIds}
             onConversationCreated={setSelectedConversation}
             preferences={preferences}
+            pendingCommand={pendingCommand}
+            onCommandConsumed={() => setPendingCommand(null)}
           />
         )}
         <div
@@ -151,17 +163,21 @@ function AppContent() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Terminal visible={activeTab === "terminal"} />
           </div>
-          {showFiles ? (
+          {showShortcuts ? (
             <div className="hidden min-h-0 w-80 flex-col border-l border-border/40 md:flex">
-              <FileManager onClose={() => setShowFiles(false)} />
+              <ShortcutPanel
+                onClose={() => setShowShortcuts(false)}
+                onSettingsOpen={() => setShowSettings(true)}
+                onSendCommand={handleSendCommand}
+              />
             </div>
           ) : (
             <button
-              title="Show files"
-              onClick={() => setShowFiles(true)}
+              title="Show shortcuts"
+              onClick={() => setShowShortcuts(true)}
               className="hidden w-8 flex-col items-center justify-center border-l border-border/40 bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex"
             >
-              <FolderOpen className="h-4 w-4" />
+              <Zap className="h-4 w-4" />
             </button>
           )}
         </div>
@@ -175,7 +191,26 @@ function AppContent() {
         />
       )}
 
-      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} onToggleSidebar={() => setShowMobileSidebar((v) => !v)} />
+      {showFilesPanel && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowFilesPanel(false)}
+        >
+          <div
+            className="flex h-full w-full max-w-sm flex-col border-l border-border bg-card shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FileManager onClose={() => setShowFilesPanel(false)} />
+          </div>
+        </div>
+      )}
+
+      <MobileNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onToggleSidebar={() => setShowMobileSidebar((v) => !v)}
+        onFilesOpen={() => setShowFilesPanel(true)}
+      />
     </div>
   );
 }

@@ -1,14 +1,15 @@
 import React from "react";
-import { Clock, MessageSquare, Terminal } from "lucide-react";
+import { Clock, FolderOpen, MessageSquare, Terminal } from "lucide-react";
 import type { ViewTab } from "../types";
 
 interface MobileNavProps {
   activeTab: ViewTab;
   onTabChange: (tab: ViewTab) => void;
   onToggleSidebar?: () => void;
+  onFilesOpen?: () => void;
 }
 
-export default function MobileNav({ activeTab, onTabChange, onToggleSidebar }: MobileNavProps) {
+export default function MobileNav({ activeTab, onTabChange, onToggleSidebar, onFilesOpen }: MobileNavProps) {
   return (
     <div
       data-testid="mobile-nav"
@@ -43,6 +44,13 @@ export default function MobileNav({ activeTab, onTabChange, onToggleSidebar }: M
       >
         <Terminal className="h-5 w-5" />
         <span>Terminal</span>
+      </button>
+      <button
+        onClick={() => onFilesOpen?.()}
+        className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs text-muted-foreground"
+      >
+        <FolderOpen className="h-5 w-5" />
+        <span>Files</span>
       </button>
     </div>
   );

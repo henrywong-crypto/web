@@ -61,16 +61,16 @@ test.describe("settings", () => {
     await expect(page.getByText("Set", { exact: true })).toBeVisible();
   });
 
-  test("UF-27 shows Bedrock message when uses_bedrock is true", async ({ page }) => {
+  test("UF-27 hides API key section when uses_bedrock is true", async ({ page }) => {
     await setupApp(page, {
       settings: { uses_bedrock: true, has_api_key: false, base_url: null },
     });
 
     await page.getByTitle("Settings").click();
 
-    await expect(page.getByText(/AWS Bedrock/)).toBeVisible();
     // API key input is not shown in bedrock mode
     await expect(page.getByPlaceholder("sk-ant-…")).not.toBeVisible();
+    await expect(page.getByText("API Key")).not.toBeVisible();
   });
 
   test("UF-28 saving an API key shows success message", async ({ page }) => {
@@ -117,7 +117,7 @@ test.describe("settings", () => {
 
     await page.getByTitle("Settings").click();
 
-    await expect(page.getByText(/AWS Bedrock/)).toBeVisible();
+    await expect(page.getByText("API Key")).not.toBeVisible();
     await expect(page.getByText("Base URL:")).not.toBeVisible();
   });
 
@@ -153,7 +153,7 @@ test.describe("settings", () => {
 
     await page.getByTitle("Settings").click();
 
-    await expect(page.getByText("Model")).toBeVisible();
+    await expect(page.getByText("Model", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sonnet", exact: true })).toBeVisible();
   });
 
