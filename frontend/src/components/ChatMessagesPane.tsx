@@ -11,7 +11,6 @@ interface ChatMessagesPaneProps {
   autoScrollToBottom?: boolean;
   showThinking?: boolean;
   autoExpandTools?: boolean;
-  onSendCommand?: (command: string) => void;
 }
 
 /** A "turn group" is a sequence of assistant + tool messages between user messages. */
@@ -108,7 +107,6 @@ export default function ChatMessagesPane({
   autoScrollToBottom,
   showThinking,
   autoExpandTools,
-  onSendCommand,
 }: ChatMessagesPaneProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
@@ -157,20 +155,9 @@ export default function ChatMessagesPane({
         ref={scrollRef}
         className="flex flex-1 items-center justify-center overflow-y-auto"
       >
-        <div className="fade-in flex flex-col items-center text-center">
-          <p className="text-lg font-semibold text-foreground">
-            Welcome back
-          </p>
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => onSendCommand?.("Hi! What can you help me with today?")}
-              className="rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
-            >
-              Say Hi
-            </button>
-          </div>
-        </div>
+        <p className="fade-in text-lg font-semibold text-foreground">
+          Welcome back
+        </p>
       </div>
     );
   }

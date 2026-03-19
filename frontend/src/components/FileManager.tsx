@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { ChevronRight, Download, Folder, File, PanelRightClose, Upload } from "lucide-react";
+import { ChevronRight, Download, Folder, File, Upload, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 import type { FileEntry } from "../types";
 
@@ -119,11 +119,11 @@ export default function FileManager({ onClose }: { onClose?: () => void }) {
           </label>
           {onClose && (
             <button
-              title="Hide files"
+              title="Close"
               onClick={onClose}
               className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              <PanelRightClose className="h-3.5 w-3.5" />
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>

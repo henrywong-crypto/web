@@ -5,7 +5,6 @@ import Sidebar from "./components/Sidebar";
 import ChatInterface from "./components/ChatInterface";
 import Terminal from "./components/Terminal";
 import FileManager from "./components/FileManager";
-import ModelChip from "./components/ModelChip";
 import MobileNav from "./components/MobileNav";
 import SettingsPanel from "./components/SettingsPanel";
 import { useUiPreferences } from "./hooks/useUiPreferences";
@@ -136,9 +135,6 @@ function AppContent() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-14 md:pb-0">
-        <div className="flex items-center justify-end border-b border-border/40 px-3 py-1">
-          <ModelChip />
-        </div>
         {activeTab === "chat" && (
           <ChatInterface
             selectedConversation={selectedConversation}

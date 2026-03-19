@@ -271,7 +271,7 @@ export default function ChatInterface({
         autoScrollToBottom={preferences?.autoScrollToBottom}
         showThinking={preferences?.showThinking}
         autoExpandTools={preferences?.autoExpandTools}
-        onSendCommand={handleSend}
+
       />
       <div className="mx-auto w-full max-w-3xl">
         <ClaudeStatus isLoading={isCurrentRunning} streamPhase={streamPhase} onAbort={handleStop} />
