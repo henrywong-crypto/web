@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import type { Conversation } from "../types";
+import type { ChatMessage, Conversation } from "../types";
 import { useSse } from "../contexts/SseContext";
 import { useChatState } from "../hooks/useChatState";
 import { useSseHandlers } from "../hooks/useSseHandlers";
@@ -83,19 +83,45 @@ export default function ChatInterface({
 
   const loadTranscriptForConversation = useCallback(
     async (conversation: Conversation, signal?: AbortSignal) => {
-      if (!conversation.sessionId || !conversation.projectDir) return;
       if (getMessages(conversation.conversationId).length > 0) return;
-      try {
-        const transcript = await loadTranscript(
-          conversation.sessionId,
-          conversation.projectDir,
-          signal,
-        );
-        const msgs = buildMessagesFromTranscript(transcript);
-        setMessages(conversation.conversationId, msgs);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        console.error("Failed to load transcript", err);
+
+      // If sessionId + projectDir exist, try server transcript first
+      if (conversation.sessionId && conversation.projectDir) {
+        try {
+          const transcript = await loadTranscript(
+            conversation.sessionId,
+            conversation.projectDir,
+            signal,
+          );
+          const msgs = buildMessagesFromTranscript(transcript);
+          if (msgs.length > 0) {
+            setMessages(conversation.conversationId, msgs);
+            // Update localStorage cache with fresh transcript
+            localStorage.setItem(
+              `chat_messages_${conversation.conversationId}`,
+              JSON.stringify(msgs),
+            );
+            return;
+          }
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          console.error("Failed to load transcript", err);
+        }
+      }
+
+      // Fall back to localStorage cache
+      const cached = localStorage.getItem(
+        `chat_messages_${conversation.conversationId}`,
+      );
+      if (cached) {
+        try {
+          const msgs = JSON.parse(cached) as ChatMessage[];
+          if (msgs.length > 0) {
+            setMessages(conversation.conversationId, msgs);
+          }
+        } catch {
+          /* ignore parse errors */
+        }
       }
     },
     [loadTranscript, getMessages, setMessages],

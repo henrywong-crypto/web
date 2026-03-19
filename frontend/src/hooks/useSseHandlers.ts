@@ -31,8 +31,8 @@ interface SseHandlerDeps {
 }
 
 interface PersistScheduler {
-  schedule: (getMessages: () => ChatMessage[], taskId: string) => void;
-  forceFlush: (getMessages: () => ChatMessage[], taskId: string) => void;
+  schedule: (getMessages: () => ChatMessage[], taskId: string, conversationId?: string) => void;
+  forceFlush: (getMessages: () => ChatMessage[], taskId: string, conversationId?: string) => void;
   cancel: () => void;
 }
 
@@ -41,23 +41,32 @@ function createPersistScheduler(): PersistScheduler {
   let dirty = false;
   let pendingGetMessages: (() => ChatMessage[]) | null = null;
   let pendingTaskId: string | null = null;
+  let pendingConversationId: string | null = null;
 
   function writeToDisk() {
     if (!dirty || !pendingGetMessages || !pendingTaskId) return;
     dirty = false;
     const taskId = pendingTaskId;
+    const conversationId = pendingConversationId;
     const messages = pendingGetMessages();
     localStorage.setItem(
       `chat_messages_task_${taskId}`,
       JSON.stringify(messages),
     );
+    if (conversationId && messages.length > 0) {
+      localStorage.setItem(
+        `chat_messages_${conversationId}`,
+        JSON.stringify(messages),
+      );
+    }
     pendingId = null;
   }
 
-  function schedule(getMessages: () => ChatMessage[], taskId: string) {
+  function schedule(getMessages: () => ChatMessage[], taskId: string, conversationId?: string) {
     dirty = true;
     pendingGetMessages = getMessages;
     pendingTaskId = taskId;
+    if (conversationId) pendingConversationId = conversationId;
     if (pendingId !== null) return;
     if (typeof requestIdleCallback === "function") {
       pendingId = requestIdleCallback(writeToDisk) as unknown as number;
@@ -66,7 +75,7 @@ function createPersistScheduler(): PersistScheduler {
     }
   }
 
-  function forceFlush(getMessages: () => ChatMessage[], taskId: string) {
+  function forceFlush(getMessages: () => ChatMessage[], taskId: string, conversationId?: string) {
     if (pendingId !== null) {
       if (typeof cancelIdleCallback === "function") {
         cancelIdleCallback(pendingId);
@@ -78,6 +87,7 @@ function createPersistScheduler(): PersistScheduler {
     dirty = true;
     pendingGetMessages = getMessages;
     pendingTaskId = taskId;
+    if (conversationId) pendingConversationId = conversationId;
     writeToDisk();
   }
 
@@ -249,7 +259,7 @@ export function useSseHandlers(
           });
           if (ss.taskId) {
             const taskId = ss.taskId;
-            schedulerRef.current.schedule(() => getMessages(session), taskId);
+            schedulerRef.current.schedule(() => getMessages(session), taskId, session);
           }
           break;
         }
@@ -265,7 +275,7 @@ export function useSseHandlers(
             }));
             if (ss.taskId) {
               const taskId = ss.taskId;
-              schedulerRef.current.schedule(() => getMessages(session), taskId);
+              schedulerRef.current.schedule(() => getMessages(session), taskId, session);
             }
           }
           break;
@@ -293,7 +303,7 @@ export function useSseHandlers(
           }
           if (ss.taskId) {
             const taskId = ss.taskId;
-            schedulerRef.current.schedule(() => getMessages(session), taskId);
+            schedulerRef.current.schedule(() => getMessages(session), taskId, session);
           }
           break;
         }
@@ -319,7 +329,7 @@ export function useSseHandlers(
           });
           if (ss.taskId) {
             const taskId = ss.taskId;
-            schedulerRef.current.schedule(() => getMessages(session), taskId);
+            schedulerRef.current.schedule(() => getMessages(session), taskId, session);
           }
           break;
         }
@@ -336,7 +346,7 @@ export function useSseHandlers(
             });
             if (ss.taskId) {
               const taskId = ss.taskId;
-              schedulerRef.current.schedule(() => getMessages(session), taskId);
+              schedulerRef.current.schedule(() => getMessages(session), taskId, session);
             }
           }
           break;
@@ -384,8 +394,14 @@ export function useSseHandlers(
           schedulerRef.current.forceFlush(
             () => getMessages(conversation_id),
             task_id,
+            conversation_id,
           );
           localStorage.removeItem(`chat_messages_task_${task_id}`);
+          // Persist messages by conversationId for restoration after remount
+          const msgs = getMessages(conversation_id);
+          if (msgs.length > 0) {
+            localStorage.setItem(`chat_messages_${conversation_id}`, JSON.stringify(msgs));
+          }
           doneState.taskId = null;
           removeRunningConversation(conversation_id);
           setSessionPendingQuestion(conversation_id, null);
@@ -431,6 +447,7 @@ export function useSseHandlers(
             schedulerRef.current.forceFlush(
               () => getMessages(session),
               ss.taskId,
+              session ?? undefined,
             );
             localStorage.removeItem(`chat_messages_task_${ss.taskId}`);
             ss.taskId = null;
@@ -473,6 +490,19 @@ export function useSseHandlers(
               setMessages(conversation_id, inProgressMessages);
             } catch {
               /* ignore parse errors */
+            }
+          }
+          if (inProgressMessages.length === 0) {
+            const convMessages = localStorage.getItem(
+              `chat_messages_${conversation_id}`,
+            );
+            if (convMessages) {
+              try {
+                inProgressMessages = JSON.parse(convMessages) as ChatMessage[];
+                setMessages(conversation_id, inProgressMessages);
+              } catch {
+                /* ignore parse errors */
+              }
             }
           }
 

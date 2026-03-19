@@ -53,6 +53,7 @@ export function useConversations(
 
   const deleteConversation = useCallback(
     (id: string) => {
+      localStorage.removeItem(`chat_messages_${id}`);
       setConversations((prev) => {
         const updated = prev.filter((c) => c.conversationId !== id);
         saveConversationsToStorage(vmId, updated);

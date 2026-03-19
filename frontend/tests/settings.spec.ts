@@ -58,7 +58,7 @@ test.describe("settings", () => {
     await page.getByTitle("Settings").click();
 
     // Green "Set" badge appears next to the API Key label
-    await expect(page.getByText("Set")).toBeVisible();
+    await expect(page.getByText("Set", { exact: true })).toBeVisible();
   });
 
   test("UF-27 shows Bedrock message when uses_bedrock is true", async ({ page }) => {
