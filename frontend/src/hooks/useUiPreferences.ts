@@ -11,7 +11,7 @@ const STORAGE_KEY = "ui_preferences";
 const DEFAULTS: UiPreferences = {
   autoExpandTools: false,
   showThinking: true,
-  autoScrollToBottom: false,
+  autoScrollToBottom: true,
 };
 
 function load(): UiPreferences {
