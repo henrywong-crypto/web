@@ -142,7 +142,6 @@ function AppContent() {
             onRunningConversationChange={setRunningConversationIds}
             onConversationCreated={setSelectedConversation}
             preferences={preferences}
-            onSettingsOpen={() => setShowSettings(true)}
           />
         )}
         <div

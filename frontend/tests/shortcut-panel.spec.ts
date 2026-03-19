@@ -1,49 +1,22 @@
 /**
- * SP-01  Blank chat shows shortcut buttons
- * SP-02  "Change Model" button opens settings modal
- * SP-03  "Resume" button sends /terminal claude --resume as chat message
- * SP-04  "Say Hi" button sends a greeting message
- * SP-05  Slash command buttons send commands via POST /chat
+ * SP-01  Blank chat shows Say Hi shortcut button
+ * SP-02  Say Hi button sends a greeting message
+ * SP-03  Model chip visible in icon rail
+ * SP-04  Clicking model chip opens model picker popover
+ * SP-05  Selecting a model in popover sends PUT /api/settings
  */
 import { test, expect } from "@playwright/test";
 import { setupApp, sse } from "./helpers/setup";
 
 test.describe("shortcut panel", () => {
-  test("SP-01 blank chat shows shortcut buttons", async ({ page }) => {
+  test("SP-01 blank chat shows Say Hi button", async ({ page }) => {
     await setupApp(page, {});
 
     await expect(page.getByText("Ask anything or use / commands to get started")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Change Model" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Say Hi" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "/clear" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "/compact" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "/cost" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "/status" })).toBeVisible();
   });
 
-  test("SP-02 Change Model button opens settings modal", async ({ page }) => {
-    await setupApp(page, {});
-
-    await page.getByRole("button", { name: "Change Model" }).click();
-
-    // Settings panel should be visible
-    await expect(page.getByText("Settings")).toBeVisible();
-  });
-
-  test("SP-03 Resume button sends /terminal claude --resume", async ({ page }) => {
-    const ctrl = await setupApp(page, {});
-
-    await page.getByRole("button", { name: "Resume" }).click();
-
-    ctrl.sendSseEvents(sse.text("Resuming...", "sess-resume"));
-
-    const body = ctrl.lastChatBody();
-    expect(body).not.toBeNull();
-    expect(body!.content).toBe("/terminal claude --resume");
-  });
-
-  test("SP-04 Say Hi button sends a greeting message", async ({ page }) => {
+  test("SP-02 Say Hi button sends a greeting message", async ({ page }) => {
     const ctrl = await setupApp(page, {});
 
     await page.getByRole("button", { name: "Say Hi" }).click();
@@ -55,15 +28,31 @@ test.describe("shortcut panel", () => {
     expect(body!.content).toContain("Hi");
   });
 
-  test("SP-05 slash command buttons send commands via POST /chat", async ({ page }) => {
+  test("SP-03 model chip visible in icon rail", async ({ page }) => {
+    await setupApp(page, {});
+
+    // The model chip shows the current model (default "sonnet" from mock settings)
+    await expect(page.getByTitle("Change model")).toBeVisible();
+  });
+
+  test("SP-04 clicking model chip opens model picker popover", async ({ page }) => {
+    await setupApp(page, {});
+
+    await page.getByTitle("Change model").click();
+
+    // Popover shows model options
+    await expect(page.getByRole("button", { name: "Haiku" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Opus", exact: true })).toBeVisible();
+  });
+
+  test("SP-05 selecting a model sends PUT /api/settings", async ({ page }) => {
     const ctrl = await setupApp(page, {});
 
-    // Click the /clear button
-    await page.getByRole("button", { name: "/clear" }).click();
-    ctrl.sendSseEvents(sse.text("Cleared.", "sess-clear"));
+    await page.getByTitle("Change model").click();
+    await page.getByRole("button", { name: "Haiku" }).click();
 
-    const body = ctrl.lastChatBody();
-    expect(body).not.toBeNull();
-    expect(body!.content).toBe("/clear");
+    // Should show success
+    await expect(page.getByText("Updated")).toBeVisible();
+    expect(ctrl.lastSettingsSave()?.model).toBe("haiku");
   });
 });

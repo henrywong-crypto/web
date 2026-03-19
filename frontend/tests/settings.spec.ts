@@ -128,8 +128,9 @@ test.describe("settings", () => {
 
     await page.getByTitle("Settings").click();
 
-    // The Opus button should be highlighted (selected)
-    const opusButton = page.getByRole("button", { name: "Opus", exact: true });
+    // The Opus button inside the settings modal should be highlighted (selected)
+    const modal = page.locator(".fixed.inset-0");
+    const opusButton = modal.getByRole("button", { name: "Opus", exact: true });
     await expect(opusButton).toBeVisible();
     await expect(opusButton).toHaveClass(/bg-primary/);
   });
@@ -140,7 +141,8 @@ test.describe("settings", () => {
     });
 
     await page.getByTitle("Settings").click();
-    await page.getByRole("button", { name: "Haiku", exact: true }).click();
+    const modal = page.locator(".fixed.inset-0");
+    await modal.getByRole("button", { name: "Haiku", exact: true }).click();
 
     await expect(page.getByText("Model updated.")).toBeVisible();
     expect(ctrl.lastSettingsSave()?.model).toBe("haiku");
@@ -153,8 +155,9 @@ test.describe("settings", () => {
 
     await page.getByTitle("Settings").click();
 
-    await expect(page.getByText("Model", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sonnet", exact: true })).toBeVisible();
+    const modal = page.locator(".fixed.inset-0");
+    await expect(modal.getByText("Model", { exact: true })).toBeVisible();
+    await expect(modal.getByRole("button", { name: "Sonnet", exact: true })).toBeVisible();
   });
 
   test("UF-35 shows success message after model change", async ({ page }) => {
@@ -163,7 +166,8 @@ test.describe("settings", () => {
     });
 
     await page.getByTitle("Settings").click();
-    await page.getByRole("button", { name: "Opus", exact: true }).click();
+    const modal = page.locator(".fixed.inset-0");
+    await modal.getByRole("button", { name: "Opus", exact: true }).click();
 
     await expect(page.getByText("Model updated.")).toBeVisible();
   });

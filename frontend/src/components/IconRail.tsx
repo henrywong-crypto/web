@@ -10,6 +10,7 @@ import {
   Terminal,
 } from "lucide-react";
 import type { ViewTab } from "../types";
+import ModelChip from "./ModelChip";
 
 interface IconRailProps {
   activeTab: ViewTab;
@@ -56,6 +57,7 @@ export default function IconRail({
       </NavButton>
 
       <div className="mt-auto flex flex-col items-center gap-0.5">
+        <ModelChip />
         {hasUserRootfs && <ResetButton csrfToken={csrfToken} />}
         <NavButton
           title={darkMode ? "Light mode" : "Dark mode"}

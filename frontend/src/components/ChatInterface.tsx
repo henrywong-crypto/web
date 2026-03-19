@@ -16,7 +16,6 @@ interface ChatInterfaceProps {
   onRunningConversationChange?: (runningIds: Set<string>) => void;
   onConversationCreated?: (conversation: Conversation) => void;
   preferences?: UiPreferences;
-  onSettingsOpen?: () => void;
 }
 
 export default function ChatInterface({
@@ -25,7 +24,6 @@ export default function ChatInterface({
   onRunningConversationChange,
   onConversationCreated,
   preferences,
-  onSettingsOpen,
 }: ChatInterfaceProps) {
   const sseCtx = useSse();
   const {
@@ -274,7 +272,6 @@ export default function ChatInterface({
         showThinking={preferences?.showThinking}
         autoExpandTools={preferences?.autoExpandTools}
         onSendCommand={handleSend}
-        onSettingsOpen={onSettingsOpen}
       />
       <div className="mx-auto w-full max-w-3xl">
         <ClaudeStatus isLoading={isCurrentRunning} streamPhase={streamPhase} onAbort={handleStop} />
