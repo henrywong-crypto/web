@@ -8,6 +8,8 @@ use ssh_client::connect_ssh;
 use std::{net::Ipv4Addr, path::Path};
 use tokio::io::AsyncReadExt;
 
+use serde::Deserialize;
+
 use crate::{
     Content,
     history::{is_interrupted_request, is_local_command_output, is_slash_command},
@@ -123,6 +125,27 @@ async fn remove_sftp_dir(sftp: &SftpSession, path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct CustomTitleEntry {
+    #[serde(rename = "type")]
+    type_: String,
+    #[serde(rename = "customTitle")]
+    custom_title: Option<String>,
+}
+
+fn extract_custom_title(contents: &str) -> Option<String> {
+    contents
+        .lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str::<CustomTitleEntry>(line).ok())
+        .filter(|e| e.type_ == "custom-title")
+        .find_map(|e| e.custom_title.filter(|t| !t.is_empty()))
+}
+
+pub(crate) fn extract_session_title(contents: &str) -> Option<String> {
+    extract_custom_title(contents).or_else(|| extract_last_user_title(contents))
+}
+
 pub(crate) fn extract_last_user_title(contents: &str) -> Option<String> {
     contents
         .lines()
@@ -181,7 +204,7 @@ async fn fetch_session_title(sftp: &SftpSession, path: &Path) -> Result<Option<S
         .await?;
     let mut contents = String::new();
     file.read_to_string(&mut contents).await?;
-    Ok(extract_last_user_title(&contents))
+    Ok(extract_session_title(&contents))
 }
 
 #[cfg(test)]
@@ -291,6 +314,48 @@ mod tests {
         assert_eq!(
             extract_last_user_title(&jsonl).as_deref(),
             Some("first message")
+        );
+    }
+
+    const FIXTURE_CUSTOM_TITLE: &str =
+        r#"{"type":"custom-title","customTitle":"fix-mobile-layout-settings"}"#;
+
+    #[test]
+    fn test_custom_title_preferred_over_user_message() {
+        let jsonl = [FIXTURE_FIRST_USER, FIXTURE_CUSTOM_TITLE].join("\n");
+        assert_eq!(
+            extract_session_title(&jsonl).as_deref(),
+            Some("fix-mobile-layout-settings")
+        );
+    }
+
+    #[test]
+    fn test_custom_title_empty_falls_back() {
+        let empty_title = r#"{"type":"custom-title","customTitle":""}"#;
+        let jsonl = [FIXTURE_FIRST_USER, empty_title].join("\n");
+        assert_eq!(
+            extract_session_title(&jsonl).as_deref(),
+            Some("first message")
+        );
+    }
+
+    #[test]
+    fn test_custom_title_missing_falls_back() {
+        let jsonl = FIXTURE_FIRST_USER.to_string();
+        assert_eq!(
+            extract_session_title(&jsonl).as_deref(),
+            Some("first message")
+        );
+    }
+
+    #[test]
+    fn test_multiple_custom_titles_uses_last() {
+        let first_title = r#"{"type":"custom-title","customTitle":"old-title"}"#;
+        let last_title = r#"{"type":"custom-title","customTitle":"new-title"}"#;
+        let jsonl = [FIXTURE_FIRST_USER, first_title, last_title].join("\n");
+        assert_eq!(
+            extract_session_title(&jsonl).as_deref(),
+            Some("new-title")
         );
     }
 }
