@@ -21,9 +21,11 @@ export default function ChatComposer({
   const [input, setInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [dragging, setDragging] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragCounterRef = useRef(0);
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
 
   // Clean up object URLs on unmount
@@ -61,23 +63,57 @@ export default function ChatComposer({
   const busy = isLoading || uploading;
   const blocked = busy;
 
+  const addFiles = useCallback((files: File[]) => {
+    if (files.length === 0) return;
+    setPendingFiles((prev) => [...prev, ...files]);
+    setImageUrls((prev) => {
+      const next = new Map(prev);
+      files.forEach((f) => {
+        if (f.type.startsWith("image/")) {
+          next.set(f.name + "-" + f.size, URL.createObjectURL(f));
+        }
+      });
+      return next;
+    });
+  }, []);
+
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(e.target.files ?? []);
-      setPendingFiles((prev) => [...prev, ...files]);
-      // Create preview URLs for any image files
-      setImageUrls((prev) => {
-        const next = new Map(prev);
-        files.forEach((f) => {
-          if (f.type.startsWith("image/")) {
-            next.set(f.name + "-" + f.size, URL.createObjectURL(f));
-          }
-        });
-        return next;
-      });
+      addFiles(Array.from(e.target.files ?? []));
       e.target.value = "";
     },
-    [],
+    [addFiles],
+  );
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (dragCounterRef.current === 1) setDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) setDragging(false);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current = 0;
+      setDragging(false);
+      if (blocked) return;
+      addFiles(Array.from(e.dataTransfer.files));
+    },
+    [blocked, addFiles],
   );
 
   const removeFile = useCallback((idx: number) => {
@@ -173,7 +209,13 @@ export default function ChatComposer({
   }, []);
 
   return (
-    <div className="flex-shrink-0 border-t border-border bg-card/60 px-3 pb-3 pt-2">
+    <div
+      className="flex-shrink-0 border-t border-border bg-card/60 px-3 pb-3 pt-2"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <div className="mx-auto max-w-3xl">
         <div className="relative">
           {/* Pending file chips */}
@@ -207,7 +249,11 @@ export default function ChatComposer({
           )}
 
           {/* Input row */}
-          <div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2 shadow-sm focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+          <div className={`flex items-center gap-2 rounded-2xl border bg-background px-3 py-2 shadow-sm transition-colors ${
+            dragging
+              ? "border-primary ring-2 ring-primary/30"
+              : "border-border focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20"
+          }`}>
             {/* File upload button */}
             <button
               type="button"
