@@ -1,12 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { Zap } from "lucide-react";
 import { SseProvider, useSse } from "./contexts/SseContext";
 import IconRail from "./components/IconRail";
 import Sidebar from "./components/Sidebar";
 import ChatInterface from "./components/ChatInterface";
 import Terminal from "./components/Terminal";
 import FileManager from "./components/FileManager";
-import ShortcutPanel from "./components/ShortcutPanel";
 import MobileNav from "./components/MobileNav";
 import SettingsPanel from "./components/SettingsPanel";
 import { useUiPreferences } from "./hooks/useUiPreferences";
@@ -62,7 +60,6 @@ function AppContent() {
   const [showSettings, setShowSettings] = useState(false);
   const { preferences, setPreference } = useUiPreferences();
   const [showFilesPanel, setShowFilesPanel] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(true);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem("ui-theme");
@@ -105,13 +102,6 @@ function AppContent() {
     [deleteSession, deleteConversation, selectedConversation],
   );
 
-  const [pendingCommand, setPendingCommand] = useState<string | null>(null);
-
-  const handleSendCommand = useCallback((command: string) => {
-    setActiveTab("chat");
-    setPendingCommand(command);
-  }, []);
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <IconRail
@@ -152,8 +142,7 @@ function AppContent() {
             onRunningConversationChange={setRunningConversationIds}
             onConversationCreated={setSelectedConversation}
             preferences={preferences}
-            pendingCommand={pendingCommand}
-            onCommandConsumed={() => setPendingCommand(null)}
+            onSettingsOpen={() => setShowSettings(true)}
           />
         )}
         <div
@@ -163,23 +152,6 @@ function AppContent() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Terminal visible={activeTab === "terminal"} />
           </div>
-          {showShortcuts ? (
-            <div className="hidden min-h-0 w-80 flex-col border-l border-border/40 md:flex">
-              <ShortcutPanel
-                onClose={() => setShowShortcuts(false)}
-                onSettingsOpen={() => setShowSettings(true)}
-                onSendCommand={handleSendCommand}
-              />
-            </div>
-          ) : (
-            <button
-              title="Show shortcuts"
-              onClick={() => setShowShortcuts(true)}
-              className="hidden w-8 flex-col items-center justify-center border-l border-border/40 bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex"
-            >
-              <Zap className="h-4 w-4" />
-            </button>
-          )}
         </div>
       </main>
 

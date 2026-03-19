@@ -11,6 +11,8 @@ interface ChatMessagesPaneProps {
   autoScrollToBottom?: boolean;
   showThinking?: boolean;
   autoExpandTools?: boolean;
+  onSendCommand?: (command: string) => void;
+  onSettingsOpen?: () => void;
 }
 
 /** A "turn group" is a sequence of assistant + tool messages between user messages. */
@@ -107,6 +109,8 @@ export default function ChatMessagesPane({
   autoScrollToBottom,
   showThinking,
   autoExpandTools,
+  onSendCommand,
+  onSettingsOpen,
 }: ChatMessagesPaneProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
@@ -157,11 +161,19 @@ export default function ChatMessagesPane({
       >
         <div className="fade-in flex flex-col items-center text-center">
           <p className="text-lg font-semibold text-foreground">
-            What can I help with?
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
             Ask anything or use / commands to get started
           </p>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <ShortcutButton onClick={() => onSettingsOpen?.()}>Change Model</ShortcutButton>
+            <ShortcutButton onClick={() => onSendCommand?.("/terminal claude --resume")}>Resume</ShortcutButton>
+            <ShortcutButton onClick={() => onSendCommand?.("Hi! What can you help me with today?")}>Say Hi</ShortcutButton>
+          </div>
+          <div className="mt-2 flex flex-wrap justify-center gap-2">
+            <ShortcutButton mono onClick={() => onSendCommand?.("/clear")}>/clear</ShortcutButton>
+            <ShortcutButton mono onClick={() => onSendCommand?.("/compact")}>/compact</ShortcutButton>
+            <ShortcutButton mono onClick={() => onSendCommand?.("/cost")}>/cost</ShortcutButton>
+            <ShortcutButton mono onClick={() => onSendCommand?.("/status")}>/status</ShortcutButton>
+          </div>
         </div>
       </div>
     );
@@ -206,5 +218,29 @@ export default function ChatMessagesPane({
         </button>
       )}
     </div>
+  );
+}
+
+function ShortcutButton({
+  onClick,
+  mono,
+  children,
+}: {
+  onClick: () => void;
+  mono?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:bg-accent hover:text-foreground ${
+        mono
+          ? "font-mono text-xs text-muted-foreground"
+          : "font-medium text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

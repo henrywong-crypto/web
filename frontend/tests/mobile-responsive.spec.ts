@@ -32,18 +32,18 @@ test.describe("mobile responsive", () => {
     await setupApp(page, {});
 
     // Should start on Chat view
-    await expect(page.getByText("What can I help with?")).toBeVisible();
+    await expect(page.getByText("Ask anything or use / commands to get started")).toBeVisible();
 
     // Tap Terminal
     const mobileNav = page.locator("[data-testid='mobile-nav']");
     await mobileNav.getByText("Terminal").click();
 
     // Chat blank state gone, terminal visible (xterm container)
-    await expect(page.getByText("What can I help with?")).not.toBeVisible();
+    await expect(page.getByText("Ask anything or use / commands to get started")).not.toBeVisible();
 
     // Tap Chat
     await mobileNav.getByText("Chat").click();
-    await expect(page.getByText("What can I help with?")).toBeVisible();
+    await expect(page.getByText("Ask anything or use / commands to get started")).toBeVisible();
   });
 
   test("MR-04 on wide viewport, sidebar visible and bottom nav hidden", async ({ page }) => {

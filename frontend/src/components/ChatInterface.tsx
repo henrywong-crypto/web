@@ -16,9 +16,7 @@ interface ChatInterfaceProps {
   onRunningConversationChange?: (runningIds: Set<string>) => void;
   onConversationCreated?: (conversation: Conversation) => void;
   preferences?: UiPreferences;
-  /** When set, ChatInterface auto-sends this command and clears it. Pair with a changing key (newChatKey) to trigger. */
-  pendingCommand?: string | null;
-  onCommandConsumed?: () => void;
+  onSettingsOpen?: () => void;
 }
 
 export default function ChatInterface({
@@ -27,8 +25,7 @@ export default function ChatInterface({
   onRunningConversationChange,
   onConversationCreated,
   preferences,
-  pendingCommand,
-  onCommandConsumed,
+  onSettingsOpen,
 }: ChatInterfaceProps) {
   const sseCtx = useSse();
   const {
@@ -215,14 +212,6 @@ export default function ChatInterface({
     ],
   );
 
-  // Auto-send pending command from shortcut panel
-  useEffect(() => {
-    if (pendingCommand) {
-      handleSend(pendingCommand);
-      onCommandConsumed?.();
-    }
-  }, [pendingCommand]); // eslint-disable-line react-hooks/exhaustive-deps
-
   const handleStop = useCallback(() => {
     if (!viewConversationId) return;
     const taskId = getTaskId(viewConversationId);
@@ -284,6 +273,8 @@ export default function ChatInterface({
         autoScrollToBottom={preferences?.autoScrollToBottom}
         showThinking={preferences?.showThinking}
         autoExpandTools={preferences?.autoExpandTools}
+        onSendCommand={handleSend}
+        onSettingsOpen={onSettingsOpen}
       />
       <div className="mx-auto w-full max-w-3xl">
         <ClaudeStatus isLoading={isCurrentRunning} streamPhase={streamPhase} onAbort={handleStop} />

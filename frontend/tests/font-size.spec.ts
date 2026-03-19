@@ -163,7 +163,7 @@ test.describe("font size hierarchy", () => {
   test("FS-09 empty state message uses base size (>=15px)", async ({ page }) => {
     await setupApp(page, {});
 
-    const emptyMsg = page.getByText("What can I help with?");
+    const emptyMsg = page.getByText("Ask anything or use / commands to get started");
     await expect(emptyMsg).toBeVisible();
 
     const fontSize = await emptyMsg.evaluate(
