@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronUp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 
 const MODEL_OPTIONS = [
@@ -34,7 +34,6 @@ export default function ModelChip() {
     return () => { cancelled = true; };
   }, []);
 
-  // Close popover on outside click
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -69,23 +68,23 @@ export default function ModelChip() {
       <button
         title="Change model"
         onClick={() => { setOpen((v) => !v); setSaveResult(null); }}
-        className="flex items-center gap-0.5 rounded-lg px-1.5 py-1 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
-        <span className="max-w-[36px] truncate">{displayLabel(model)}</span>
-        <ChevronUp className="h-2.5 w-2.5 flex-shrink-0 opacity-60" />
+        {displayLabel(model)}
+        <ChevronDown className="h-3 w-3 opacity-50" />
       </button>
 
       {open && (
-        <div className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 rounded-xl border border-border bg-card p-2 shadow-xl">
-          <div className="flex flex-col gap-1" style={{ minWidth: "120px" }}>
+        <div className="absolute right-0 top-full z-50 mt-1 rounded-xl border border-border bg-card p-1.5 shadow-xl">
+          <div className="flex flex-col gap-0.5" style={{ minWidth: "130px" }}>
             {MODEL_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => handleChange(opt.value)}
-                className={`rounded-lg px-3 py-1.5 text-left text-xs font-medium transition-colors ${
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-left text-xs font-medium transition-colors ${
                   model === opt.value
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    : "text-foreground hover:bg-accent"
                 }`}
               >
                 {opt.label}
@@ -93,10 +92,10 @@ export default function ModelChip() {
             ))}
           </div>
           {saveResult === "success" && (
-            <p className="mt-1.5 text-center text-[10px] text-emerald-500">Updated</p>
+            <p className="mt-1 text-center text-[10px] text-emerald-500">Updated</p>
           )}
           {saveResult === "error" && (
-            <p className="mt-1.5 text-center text-[10px] text-red-400">Failed</p>
+            <p className="mt-1 text-center text-[10px] text-red-400">Failed</p>
           )}
         </div>
       )}

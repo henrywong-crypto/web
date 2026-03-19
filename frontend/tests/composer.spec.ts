@@ -119,7 +119,7 @@ test.describe("composer", () => {
     await setupApp(page, {});
 
     // Click somewhere else first to lose focus
-    await page.getByText("Ask anything or use / commands to get started").click();
+    await page.getByText("Welcome back").click();
 
     // Click New Chat — selectedConversation stays null but newChatKey increments,
     // which must still trigger focus even without a selectedConversation state change

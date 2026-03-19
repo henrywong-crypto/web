@@ -1,7 +1,7 @@
 /**
  * SP-01  Blank chat shows Say Hi shortcut button
  * SP-02  Say Hi button sends a greeting message
- * SP-03  Model chip visible in icon rail
+ * SP-03  Model chip visible in top bar
  * SP-04  Clicking model chip opens model picker popover
  * SP-05  Selecting a model in popover sends PUT /api/settings
  */
@@ -12,7 +12,7 @@ test.describe("shortcut panel", () => {
   test("SP-01 blank chat shows Say Hi button", async ({ page }) => {
     await setupApp(page, {});
 
-    await expect(page.getByText("Ask anything or use / commands to get started")).toBeVisible();
+    await expect(page.getByText("Welcome back")).toBeVisible();
     await expect(page.getByRole("button", { name: "Say Hi" })).toBeVisible();
   });
 
@@ -28,7 +28,7 @@ test.describe("shortcut panel", () => {
     expect(body!.content).toContain("Hi");
   });
 
-  test("SP-03 model chip visible in icon rail", async ({ page }) => {
+  test("SP-03 model chip visible in top bar", async ({ page }) => {
     await setupApp(page, {});
 
     // The model chip shows the current model (default "sonnet" from mock settings)

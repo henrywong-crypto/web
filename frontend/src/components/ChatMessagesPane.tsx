@@ -159,7 +159,7 @@ export default function ChatMessagesPane({
       >
         <div className="fade-in flex flex-col items-center text-center">
           <p className="text-lg font-semibold text-foreground">
-            Ask anything or use / commands to get started
+            Welcome back
           </p>
           <div className="mt-4">
             <button
