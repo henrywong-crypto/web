@@ -1,5 +1,5 @@
-import React from "react";
-import { Plus, RotateCw, Trash2 } from "lucide-react";
+import React, { useState } from "react";
+import { Plus, RotateCw, Search, Trash2, X } from "lucide-react";
 import type { Conversation } from "../types";
 
 interface SidebarProps {
@@ -21,8 +21,16 @@ export default function Sidebar({
   onDeleteConversation,
   onRefresh,
 }: SidebarProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filtered = conversations.filter(
+    (c) =>
+      !searchQuery ||
+      c.title?.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
+
   return (
-    <div className="flex w-60 flex-col border-r border-border bg-card">
+    <div className="hidden w-60 flex-col border-r border-border bg-card md:flex">
       <div className="flex h-11 items-center justify-between border-b border-border px-3">
         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Conversations
@@ -36,13 +44,32 @@ export default function Sidebar({
         </button>
       </div>
 
+      <div className="relative border-b border-border px-3 py-2">
+        <Search className="absolute left-5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          type="text"
+          placeholder="Search conversations…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full rounded-md border border-border bg-background py-1 pl-7 pr-7 text-sm text-foreground placeholder-muted-foreground/50 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/20"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
       <div className="flex-1 overflow-y-auto py-1.5">
-        {conversations.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
             No conversations yet
           </p>
         ) : (
-          conversations.map((conversation) => (
+          filtered.map((conversation) => (
             <ConversationRow
               key={conversation.conversationId}
               conversation={conversation}

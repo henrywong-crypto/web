@@ -5,6 +5,7 @@ import {
   Moon,
   RotateCcw,
   Settings,
+  SlidersHorizontal,
   Sun,
   Terminal,
 } from "lucide-react";
@@ -16,6 +17,7 @@ interface IconRailProps {
   hasUserRootfs: boolean;
   csrfToken: string;
   onSettingsOpen: () => void;
+  onQuickSettingsOpen: () => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
 }
@@ -26,11 +28,12 @@ export default function IconRail({
   hasUserRootfs,
   csrfToken,
   onSettingsOpen,
+  onQuickSettingsOpen,
   darkMode,
   onToggleDarkMode,
 }: IconRailProps) {
   return (
-    <div className="flex w-12 flex-col items-center gap-0.5 border-r border-border bg-card py-3">
+    <div className="hidden w-12 flex-col items-center gap-0.5 border-r border-border bg-card py-3 md:flex">
       <NavButton
         active={activeTab === "chat"}
         title="Chat"
@@ -57,6 +60,9 @@ export default function IconRail({
           ) : (
             <Moon className="h-4 w-4" />
           )}
+        </NavButton>
+        <NavButton title="Quick preferences" onClick={onQuickSettingsOpen}>
+          <SlidersHorizontal className="h-4 w-4" />
         </NavButton>
         <NavButton title="Settings" onClick={onSettingsOpen}>
           <Settings className="h-4 w-4" />

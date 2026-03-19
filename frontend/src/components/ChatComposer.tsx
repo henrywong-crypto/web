@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Paperclip, Send, Square, X } from "lucide-react";
+import { ImagePlus, Paperclip, Send, Square, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 
 interface ChatComposerProps {
@@ -53,6 +53,15 @@ export default function ChatComposer({
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
+
+  // Clean up object URLs on unmount
+  useEffect(() => {
+    return () => {
+      imageUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Focus the composer on mount and whenever focusKey changes (e.g. "New Chat" clicked)
   useEffect(() => {
@@ -97,8 +106,40 @@ export default function ChatComposer({
     [],
   );
 
+  const handleImageSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files ?? []);
+      setPendingFiles((prev) => [...prev, ...files]);
+      // Create preview URLs for images
+      setImageUrls((prev) => {
+        const next = new Map(prev);
+        files.forEach((f) => {
+          if (f.type.startsWith("image/")) {
+            next.set(f.name + "-" + f.size, URL.createObjectURL(f));
+          }
+        });
+        return next;
+      });
+      e.target.value = "";
+    },
+    [],
+  );
+
   const removeFile = useCallback((idx: number) => {
-    setPendingFiles((prev) => prev.filter((_, i) => i !== idx));
+    setPendingFiles((prev) => {
+      const file = prev[idx];
+      if (file && file.type.startsWith("image/")) {
+        const key = file.name + "-" + file.size;
+        setImageUrls((urls) => {
+          const next = new Map(urls);
+          const url = next.get(key);
+          if (url) URL.revokeObjectURL(url);
+          next.delete(key);
+          return next;
+        });
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
   }, []);
 
   const handleSend = useCallback(async () => {
@@ -252,22 +293,30 @@ export default function ChatComposer({
           {/* Pending file chips */}
           {pendingFiles.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
-              {pendingFiles.map((file, i) => (
-                <span
-                  key={file.name + "-" + i}
-                  className="flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-sm text-foreground"
-                >
-                  <Paperclip className="h-2.5 w-2.5 text-muted-foreground" />
-                  <span className="max-w-[160px] truncate">{file.name}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(i)}
-                    className="ml-0.5 text-muted-foreground hover:text-foreground"
+              {pendingFiles.map((file, i) => {
+                const imgKey = file.name + "-" + file.size;
+                const thumbUrl = file.type.startsWith("image/") ? imageUrls.get(imgKey) : undefined;
+                return (
+                  <span
+                    key={file.name + "-" + i}
+                    className="flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-sm text-foreground"
                   >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </span>
-              ))}
+                    {thumbUrl ? (
+                      <img src={thumbUrl} alt="" className="h-5 w-5 rounded object-cover" />
+                    ) : (
+                      <Paperclip className="h-2.5 w-2.5 text-muted-foreground" />
+                    )}
+                    <span className="max-w-[160px] truncate">{file.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="ml-0.5 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                );
+              })}
             </div>
           )}
 
@@ -289,6 +338,25 @@ export default function ChatComposer({
               multiple
               className="hidden"
               onChange={handleFileSelect}
+            />
+
+            {/* Image upload button */}
+            <button
+              type="button"
+              title="Attach image"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={blocked}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+            >
+              <ImagePlus className="h-4 w-4" />
+            </button>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleImageSelect}
             />
 
             <textarea

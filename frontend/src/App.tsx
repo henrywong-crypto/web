@@ -6,7 +6,10 @@ import Sidebar from "./components/Sidebar";
 import ChatInterface from "./components/ChatInterface";
 import Terminal from "./components/Terminal";
 import FileManager from "./components/FileManager";
+import MobileNav from "./components/MobileNav";
 import SettingsPanel from "./components/SettingsPanel";
+import QuickSettingsPanel from "./components/QuickSettingsPanel";
+import { useUiPreferences } from "./hooks/useUiPreferences";
 import type { Conversation, ViewTab } from "./types";
 
 class ErrorBoundary extends React.Component<
@@ -57,6 +60,8 @@ function AppContent() {
   >(new Set());
   const [newChatKey, setNewChatKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [showQuickSettings, setShowQuickSettings] = useState(false);
+  const { preferences, setPreference } = useUiPreferences();
   const [showFiles, setShowFiles] = useState(true);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem("ui-theme");
@@ -107,6 +112,7 @@ function AppContent() {
         hasUserRootfs={hasUserRootfs}
         csrfToken={csrfToken}
         onSettingsOpen={() => setShowSettings(true)}
+        onQuickSettingsOpen={() => setShowQuickSettings(true)}
         darkMode={darkMode}
         onToggleDarkMode={toggleDarkMode}
       />
@@ -125,7 +131,7 @@ function AppContent() {
         />
       )}
 
-      <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden pb-14 md:pb-0">
         {activeTab === "chat" && (
           <ChatInterface
             selectedConversation={selectedConversation}
@@ -158,6 +164,15 @@ function AppContent() {
       </main>
 
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+
+      <QuickSettingsPanel
+        open={showQuickSettings}
+        onClose={() => setShowQuickSettings(false)}
+        preferences={preferences}
+        onToggle={setPreference}
+      />
+
+      <MobileNav activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
   );
 }
