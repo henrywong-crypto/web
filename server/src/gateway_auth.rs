@@ -100,7 +100,10 @@ pub(crate) async fn provision_gateway_api_key(
         format!("{}/api/v1/api-keys", gateway_api_url)
     };
 
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .context("failed to build HTTP client")?;
     let resp = client
         .post(&url)
         .bearer_auth(access_token)
