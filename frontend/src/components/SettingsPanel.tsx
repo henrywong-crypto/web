@@ -88,8 +88,16 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
       const data = await res.json();
       if (data.redirect) {
-        // Need to re-auth through gateway OAuth
-        window.location.href = data.redirect;
+        // Need to re-auth through gateway OAuth — only allow https or same-origin
+        try {
+          const url = new URL(data.redirect, window.location.origin);
+          if (url.protocol !== "https:" && url.origin !== window.location.origin) {
+            throw new Error("Insecure redirect blocked");
+          }
+          window.location.href = url.href;
+        } catch {
+          throw new Error("Invalid redirect URL");
+        }
         return;
       }
       setRenewResult("success");

@@ -56,7 +56,11 @@ test.describe("image attachment", () => {
     // Override the upload route after setupApp (later routes have higher priority in Playwright)
     await page.route("**/chat-upload", async (route) => {
       uploadReceived = true;
-      await route.fulfill({ status: 200, body: "" });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ path: "/tmp/photo.png" }),
+      });
     });
 
     const fileInput = page.locator('input[type="file"]').first();

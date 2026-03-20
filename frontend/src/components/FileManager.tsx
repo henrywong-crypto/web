@@ -55,10 +55,6 @@ export default function FileManager({ onClose }: { onClose?: () => void }) {
     async (file: File) => {
       flushSync(() => setUploadStatus("Uploading…"));
       const formData = new FormData();
-      formData.append(
-        "path",
-        currentPath.replace(/\/$/, "") + "/" + file.name.replace(/[/\\]/g, "_"),
-      );
       formData.append("file", file);
       try {
         const res = await csrfFetch(uploadAction, {
@@ -198,7 +194,7 @@ export default function FileManager({ onClose }: { onClose?: () => void }) {
                     <a
                       href={`/download?path=${encodeURIComponent(entryPath)}`}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       title="Download as zip"
                       onClick={(e) => e.stopPropagation()}
                       className="ml-1 text-sm text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
@@ -217,6 +213,7 @@ export default function FileManager({ onClose }: { onClose?: () => void }) {
                     window.open(
                       `/download?path=${encodeURIComponent(entryPath)}`,
                       "_blank",
+                      "noopener,noreferrer",
                     )
                   }
                   action={
