@@ -95,11 +95,21 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
 
   const csrfFetch = useCallback(
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const headers = new Headers(init?.headers);
-      if (!headers.has("x-csrf-token")) {
-        headers.set("x-csrf-token", csrfTokenRef.current);
+      const existingHeaders = init?.headers;
+      // Merge csrf token without using new Headers() — that would override
+      // the browser's automatic Content-Type for FormData bodies.
+      let merged: Record<string, string>;
+      if (existingHeaders instanceof Headers) {
+        merged = Object.fromEntries(existingHeaders.entries());
+      } else if (Array.isArray(existingHeaders)) {
+        merged = Object.fromEntries(existingHeaders);
+      } else {
+        merged = { ...(existingHeaders as Record<string, string> | undefined) };
       }
-      const res = await fetch(input, { ...init, headers });
+      if (!merged["x-csrf-token"]) {
+        merged["x-csrf-token"] = csrfTokenRef.current;
+      }
+      const res = await fetch(input, { ...init, headers: merged });
       const newToken = res.headers.get("x-csrf-token");
       if (newToken) {
         csrfTokenRef.current = newToken;
