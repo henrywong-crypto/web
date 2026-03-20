@@ -18,7 +18,7 @@ export default function ChatComposer({
   focusKey,
   droppedFiles,
 }: ChatComposerProps) {
-  const { uploadAction, csrfToken, uploadDir } = useSse();
+  const { uploadAction, csrfToken, uploadDir, refreshCsrfToken } = useSse();
 
   const [input, setInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -132,6 +132,7 @@ export default function ChatComposer({
             headers: { "x-csrf-token": csrfToken },
             body: formData,
           });
+          refreshCsrfToken(res);
           if (res.ok)
             uploadedPaths.push(
               uploadDir.replace(/\/$/, "") +
@@ -163,6 +164,7 @@ export default function ChatComposer({
     pendingFiles,
     uploadAction,
     csrfToken,
+    refreshCsrfToken,
     uploadDir,
     onSend,
   ]);

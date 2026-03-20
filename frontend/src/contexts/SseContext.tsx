@@ -20,6 +20,7 @@ import { useQuestionStorage } from "../hooks/useQuestionStorage";
 interface SseContextValue {
   vmId: string;
   csrfToken: string;
+  refreshCsrfToken: (res: Response) => void;
   uploadDir: string;
   uploadAction: string;
   hasUserRootfs: boolean;
@@ -308,6 +309,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       value={{
         vmId,
         csrfToken,
+        refreshCsrfToken,
         uploadDir,
         uploadAction,
         hasUserRootfs,

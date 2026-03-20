@@ -222,6 +222,11 @@ export interface AppController {
    * for the next POST /chat. Pass null to stop sending the header.
    */
   setChatResponseToken(token: string | null): void;
+  /**
+   * Set the token the mock will echo back in the x-csrf-token response header
+   * for the next PUT /api/settings. Pass null to stop sending the header.
+   */
+  setSettingsResponseToken(token: string | null): void;
   /** CSRF token sent in the most recent DELETE /chat-transcript, or null. */
   lastDeleteCsrfToken(): string | null;
   /** Whether a renew-gateway-key request was received. */
@@ -274,6 +279,7 @@ export async function setupApp(
   let uploadWasReceived = false;
   let lastResetBody: string | null = null;
   let chatResponseToken: string | null = null;
+  let settingsResponseToken: string | null = null;
   let lastDeleteCsrfTokenValue: string | null = null;
   let renewGatewayKeyReceived = false;
 
@@ -366,7 +372,11 @@ export async function setupApp(
         await route.fulfill({ status: 500, body: "Internal Server Error" });
       } else {
         lastSettingsSaveBody = route.request().postDataJSON() as { api_key?: string; model?: string };
-        await route.fulfill({ status: 200, body: "" });
+        const headers: Record<string, string> = {};
+        if (settingsResponseToken !== null) {
+          headers["x-csrf-token"] = settingsResponseToken;
+        }
+        await route.fulfill({ status: 200, headers, body: "" });
       }
     } else {
       await route.fulfill({
@@ -509,6 +519,7 @@ export async function setupApp(
     uploadReceived: () => uploadWasReceived,
     lastResetFormData: () => lastResetBody,
     setChatResponseToken: (token) => { chatResponseToken = token; },
+    setSettingsResponseToken: (token) => { settingsResponseToken = token; },
     lastDeleteCsrfToken: () => lastDeleteCsrfTokenValue,
     renewGatewayKeyRequested: () => renewGatewayKeyReceived,
   };

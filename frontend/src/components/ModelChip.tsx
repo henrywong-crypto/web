@@ -16,7 +16,7 @@ function displayLabel(model: string): string {
 }
 
 export default function ModelChip() {
-  const { csrfToken } = useSse();
+  const { csrfToken, refreshCsrfToken } = useSse();
   const [model, setModel] = useState("sonnet");
   const [open, setOpen] = useState(false);
   const [saveResult, setSaveResult] = useState<"success" | "error" | null>(null);
@@ -56,11 +56,12 @@ export default function ModelChip() {
         },
         body: JSON.stringify({ model: value }),
       });
+      refreshCsrfToken(res);
       setSaveResult(res.ok ? "success" : "error");
     } catch {
       setSaveResult("error");
     }
-  }, [csrfToken]);
+  }, [csrfToken, refreshCsrfToken]);
 
   return (
     <div className="relative" ref={popoverRef}>
