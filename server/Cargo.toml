@@ -22,6 +22,7 @@ firecracker-manager = { path = "../firecracker-manager" }
 futures = "0.3.32"
 handlers = { git = "https://github.com/llm-proxy-rs/cognito.git", version = "0.1.0" }
 html-escape = "0.2.13"
+reqwest = { version = "0.12", features = ["json"] }
 russh = "0.57.1"
 russh-sftp = "2.1.1"
 sanitize-filename = "0.6.0"
@@ -39,6 +40,7 @@ tower-sessions-sqlx-store = { git = "https://github.com/llm-proxy-rs/tower-sessi
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 upload = { path = "../upload" }
+urlencoding = "2.1"
 uuid = { version = "1.22.0", features = ["v4"] }
 vm-lifecycle = { path = "../vm-lifecycle" }
 zip = "8.2.0"

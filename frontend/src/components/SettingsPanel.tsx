@@ -7,6 +7,7 @@ interface SettingsData {
   uses_bedrock: boolean;
   has_api_key: boolean;
   base_url: string | null;
+  gateway_configured: boolean;
 }
 
 interface SettingsPanelProps {
@@ -23,7 +24,11 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [renewing, setRenewing] = useState(false);
   const [saveResult, setSaveResult] = useState<"success" | "error" | null>(
+    null,
+  );
+  const [renewResult, setRenewResult] = useState<"success" | "error" | null>(
     null,
   );
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -74,6 +79,33 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
       setSaving(false);
     }
   }, [apiKey, csrfToken, loadSettings]);
+
+  const handleRenewApiKey = useCallback(async () => {
+    setRenewing(true);
+    setRenewResult(null);
+    try {
+      const res = await fetch("/api/renew-gateway-key", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+      });
+      if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.redirect) {
+        // Need to re-auth through gateway OAuth
+        window.location.href = data.redirect;
+        return;
+      }
+      setRenewResult("success");
+      await loadSettings();
+    } catch {
+      setRenewResult("error");
+    } finally {
+      setRenewing(false);
+    }
+  }, [csrfToken, loadSettings]);
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "general", label: "General" },
@@ -131,7 +163,14 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
                 </div>
               ) : settings ? (
                 <div className="space-y-4">
-                  {!settings.uses_bedrock && (
+                  {!settings.uses_bedrock && settings.gateway_configured ? (
+                    <RenewApiKeySection
+                      hasApiKey={settings.has_api_key}
+                      renewing={renewing}
+                      renewResult={renewResult}
+                      onRenew={handleRenewApiKey}
+                    />
+                  ) : !settings.uses_bedrock ? (
                     <ApiKeySection
                       hasApiKey={settings.has_api_key}
                       apiKey={apiKey}
@@ -140,7 +179,7 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
                       saving={saving}
                       saveResult={saveResult}
                     />
-                  )}
+                  ) : null}
                   {!settings.uses_bedrock && settings.base_url && (
                     <div className="text-sm text-muted-foreground">
                       Base URL:{" "}
@@ -243,6 +282,50 @@ function ApiKeySection({
       {saveResult === "error" && (
         <p className="text-sm text-red-400">
           Failed to save. Please try again.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function RenewApiKeySection({
+  hasApiKey,
+  renewing,
+  renewResult,
+  onRenew,
+}: {
+  hasApiKey: boolean;
+  renewing: boolean;
+  renewResult: "success" | "error" | null;
+  onRenew: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-semibold text-foreground">API Key</span>
+        {hasApiKey && (
+          <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+            <Check className="h-3 w-3" />
+            Set
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Your API key is managed automatically. Use the button below to generate a new one.
+      </p>
+      <button
+        onClick={onRenew}
+        disabled={renewing}
+        className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+      >
+        {renewing ? "Renewing…" : "Renew API Key"}
+      </button>
+      {renewResult === "success" && (
+        <p className="text-sm text-emerald-500">API key renewed successfully.</p>
+      )}
+      {renewResult === "error" && (
+        <p className="text-sm text-red-400">
+          Failed to renew. Please try again.
         </p>
       )}
     </div>

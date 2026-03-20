@@ -155,6 +155,7 @@ export interface SettingsData {
   has_api_key: boolean;
   base_url: string | null;
   model: string | null;
+  gateway_configured: boolean;
 }
 
 // ── App HTML ──────────────────────────────────────────────────────────────
@@ -223,6 +224,8 @@ export interface AppController {
   setChatResponseToken(token: string | null): void;
   /** CSRF token sent in the most recent DELETE /chat-transcript, or null. */
   lastDeleteCsrfToken(): string | null;
+  /** Whether a renew-gateway-key request was received. */
+  renewGatewayKeyRequested(): boolean;
 }
 
 export interface SetupOpts {
@@ -241,6 +244,10 @@ export interface SetupOpts {
   chatError?: string;
   /** When set, POST /chat-question-answer returns 500 with this text instead of the normal 200 response. */
   answerError?: string;
+  /** When true, POST /api/renew-gateway-key returns a 500 error. */
+  renewGatewayKeyError?: boolean;
+  /** When set, POST /api/renew-gateway-key returns a redirect URL. */
+  renewGatewayKeyRedirect?: string;
 }
 
 export async function setupApp(
@@ -255,6 +262,7 @@ export async function setupApp(
     has_api_key: false,
     base_url: null,
     model: "sonnet",
+    gateway_configured: false,
     ...opts.settings,
   };
 
@@ -267,6 +275,7 @@ export async function setupApp(
   let lastResetBody: string | null = null;
   let chatResponseToken: string | null = null;
   let lastDeleteCsrfTokenValue: string | null = null;
+  let renewGatewayKeyReceived = false;
 
   // SSE event delivery — shared between POST /chat and GET /chat-stream/**
   let resolveSse: ((events: SseEvent[]) => void) | null = null;
@@ -364,6 +373,26 @@ export async function setupApp(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify(settingsData),
+      });
+    }
+  });
+
+  // ── Renew gateway key endpoint ──────────────────────────────────────────
+  await page.route("**/api/renew-gateway-key", async (route) => {
+    renewGatewayKeyReceived = true;
+    if (opts.renewGatewayKeyError) {
+      await route.fulfill({ status: 500, body: "Internal Server Error" });
+    } else if (opts.renewGatewayKeyRedirect) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ redirect: opts.renewGatewayKeyRedirect }),
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "ok" }),
       });
     }
   });
@@ -481,6 +510,7 @@ export async function setupApp(
     lastResetFormData: () => lastResetBody,
     setChatResponseToken: (token) => { chatResponseToken = token; },
     lastDeleteCsrfToken: () => lastDeleteCsrfTokenValue,
+    renewGatewayKeyRequested: () => renewGatewayKeyReceived,
   };
 }
 

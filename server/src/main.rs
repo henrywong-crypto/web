@@ -3,6 +3,8 @@ mod chat;
 mod csrf;
 mod download;
 mod files;
+mod gateway_auth;
+mod gateway_callback;
 mod handlers;
 mod settings;
 mod state;
@@ -39,6 +41,8 @@ use crate::{
     csrf::csrf_middleware,
     download::download_file_handler,
     files::list_files_handler,
+    gateway_auth::renew_gateway_key_handler,
+    gateway_callback::gateway_callback_handler,
     handlers::{
         delete_chat_session_handler, delete_user_rootfs_handler, get_chat_transcript_handler,
         get_csrf_token_handler, get_or_create_terminal, get_terminal_page, handle_chat_upload,
@@ -132,6 +136,11 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
         .route("/login/cognito", get(get_cognito_login_handler))
         .route("/logout", get(get_logout_handler))
         .route("/callback", get(get_callback_handler))
+        .route("/callback/gateway", get(gateway_callback_handler))
+        .route(
+            "/api/renew-gateway-key",
+            post(renew_gateway_key_handler),
+        )
         .route("/static/app.js", get(serve_app_js))
         .route("/static/styles.css", get(serve_styles_css))
         .with_state(app_state)

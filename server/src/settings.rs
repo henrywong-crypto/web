@@ -7,6 +7,7 @@ use chat_settings::{build_api_key_settings_json, get_vm_settings, get_vm_setting
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    gateway_auth::is_gateway_configured,
     handlers::UserVm,
     state::{AppError, AppState},
 };
@@ -17,6 +18,7 @@ pub(crate) struct SettingsResponse {
     has_api_key: bool,
     base_url: Option<String>,
     model: Option<String>,
+    gateway_configured: bool,
 }
 
 pub(crate) async fn get_settings_handler(
@@ -35,6 +37,7 @@ pub(crate) async fn get_settings_handler(
         has_api_key: if state.config.use_iam_creds { false } else { vm_settings.has_api_key },
         base_url: state.config.anthropic_base_url.clone(),
         model: vm_settings.model,
+        gateway_configured: is_gateway_configured(&state.config),
     })
     .into_response())
 }

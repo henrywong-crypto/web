@@ -147,6 +147,29 @@ pub(crate) async fn get_or_create_terminal(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
+    // If a gateway API key is stored in session, ensure it's written to the VM.
+    // This handles both initial provisioning and VM reset/reprovisioning.
+    if let Ok(Some(gateway_key)) = session.get::<String>("gateway_api_key").await {
+        let content = chat_settings::build_api_key_settings_json(
+            &gateway_key,
+            state.config.anthropic_base_url.as_deref(),
+            &state.config.anthropic_default_haiku_model,
+            &state.config.anthropic_default_sonnet_model,
+            &state.config.anthropic_default_opus_model,
+            None,
+        );
+        if let Err(e) = chat_settings::set_vm_settings(
+            user_vm.guest_ip,
+            &state.config.ssh_key_path,
+            &state.config.ssh_user,
+            &state.config.vm_host_key_path,
+            &content,
+        )
+        .await
+        {
+            tracing::warn!("failed to write gateway key to VM: {e}");
+        }
+    }
     build_terminal_response(&session, &state, user_vm.user_id, &user_vm.vm_id).await
 }
 
