@@ -15,7 +15,7 @@ interface IconRailProps {
   activeTab: ViewTab;
   onTabChange: (tab: ViewTab) => void;
   hasUserRootfs: boolean;
-  csrfToken: string;
+  csrfFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   onSettingsOpen: () => void;
   onFilesOpen: () => void;
   darkMode: boolean;
@@ -26,7 +26,7 @@ export default function IconRail({
   activeTab,
   onTabChange,
   hasUserRootfs,
-  csrfToken,
+  csrfFetch,
   onSettingsOpen,
   onFilesOpen,
   darkMode,
@@ -56,7 +56,7 @@ export default function IconRail({
       </NavButton>
 
       <div className="mt-auto flex flex-col items-center gap-0.5">
-        {hasUserRootfs && <ResetButton csrfToken={csrfToken} />}
+        {hasUserRootfs && <ResetButton csrfFetch={csrfFetch} />}
         <NavButton
           title={darkMode ? "Light mode" : "Dark mode"}
           onClick={onToggleDarkMode}
@@ -112,18 +112,17 @@ function NavButton({
   );
 }
 
-function ResetButton({ csrfToken }: { csrfToken: string }) {
+function ResetButton({ csrfFetch }: { csrfFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> }) {
   const [open, setOpen] = React.useState(false);
 
   const handleReset = React.useCallback(async () => {
-    const res = await fetch("/rootfs/delete", {
+    const res = await csrfFetch("/rootfs/delete", {
       method: "POST",
-      headers: { "x-csrf-token": csrfToken },
     });
     if (res.ok || res.status === 303) {
       window.location.href = "/";
     }
-  }, [csrfToken]);
+  }, [csrfFetch]);
 
   return (
     <>

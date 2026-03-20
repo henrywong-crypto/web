@@ -19,7 +19,7 @@ interface SettingsPanelProps {
 type Tab = "general" | "preferences";
 
 export default function SettingsPanel({ onClose, preferences, onTogglePreference }: SettingsPanelProps) {
-  const { csrfToken } = useSse();
+  const { csrfFetch } = useSse();
   const [settings, setSettings] = useState<SettingsData | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [loading, setLoading] = useState(true);
@@ -61,12 +61,9 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
     setSaving(true);
     setSaveResult(null);
     try {
-      const res = await fetch("/api/settings", {
+      const res = await csrfFetch("/api/settings", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfToken,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ api_key: apiKey.trim() }),
       });
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
@@ -78,18 +75,15 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
     } finally {
       setSaving(false);
     }
-  }, [apiKey, csrfToken, loadSettings]);
+  }, [apiKey, csrfFetch, loadSettings]);
 
   const handleRenewApiKey = useCallback(async () => {
     setRenewing(true);
     setRenewResult(null);
     try {
-      const res = await fetch("/api/renew-gateway-key", {
+      const res = await csrfFetch("/api/renew-gateway-key", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfToken,
-        },
+        headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
       const data = await res.json();
@@ -105,7 +99,7 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
     } finally {
       setRenewing(false);
     }
-  }, [csrfToken, loadSettings]);
+  }, [csrfFetch, loadSettings]);
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "general", label: "General" },

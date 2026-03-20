@@ -16,7 +16,7 @@ function displayLabel(model: string): string {
 }
 
 export default function ModelChip() {
-  const { csrfToken, refreshCsrfToken } = useSse();
+  const { csrfFetch } = useSse();
   const [model, setModel] = useState("sonnet");
   const [open, setOpen] = useState(false);
   const [saveResult, setSaveResult] = useState<"success" | "error" | null>(null);
@@ -48,20 +48,16 @@ export default function ModelChip() {
     setModel(value);
     setSaveResult(null);
     try {
-      const res = await fetch("/api/settings", {
+      const res = await csrfFetch("/api/settings", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfToken,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: value }),
       });
-      refreshCsrfToken(res);
       setSaveResult(res.ok ? "success" : "error");
     } catch {
       setSaveResult("error");
     }
-  }, [csrfToken, refreshCsrfToken]);
+  }, [csrfFetch]);
 
   return (
     <div className="relative" ref={popoverRef}>

@@ -18,7 +18,7 @@ function parentPath(path: string, rootPath: string): string {
 }
 
 export default function FileManager({ onClose }: { onClose?: () => void }) {
-  const { uploadDir, uploadAction, csrfToken } = useSse();
+  const { uploadDir, uploadAction, csrfFetch } = useSse();
   const [currentPath, setCurrentPath] = useState(uploadDir);
   const [entries, setEntries] = useState<FileEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,9 +61,8 @@ export default function FileManager({ onClose }: { onClose?: () => void }) {
       );
       formData.append("file", file);
       try {
-        const res = await fetch(uploadAction, {
+        const res = await csrfFetch(uploadAction, {
           method: "POST",
-          headers: { "x-csrf-token": csrfToken },
           body: formData,
         });
         if (res.ok) {
@@ -80,7 +79,7 @@ export default function FileManager({ onClose }: { onClose?: () => void }) {
         3000,
       );
     },
-    [csrfToken, currentPath, uploadAction, loadDir],
+    [csrfFetch, currentPath, uploadAction, loadDir],
   );
 
   useEffect(() => {

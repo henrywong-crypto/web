@@ -43,7 +43,7 @@ class ErrorBoundary extends React.Component<
 function AppContent() {
   const {
     hasUserRootfs,
-    csrfToken,
+    csrfFetch,
     conversations,
     createConversation,
     deleteConversation,
@@ -108,7 +108,7 @@ function AppContent() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         hasUserRootfs={hasUserRootfs}
-        csrfToken={csrfToken}
+        csrfFetch={csrfFetch}
         onSettingsOpen={() => setShowSettings(true)}
         onFilesOpen={() => setShowFilesPanel(true)}
         darkMode={darkMode}

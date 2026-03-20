@@ -19,8 +19,8 @@ import { useQuestionStorage } from "../hooks/useQuestionStorage";
 
 interface SseContextValue {
   vmId: string;
-  csrfToken: string;
-  refreshCsrfToken: (res: Response) => void;
+  /** Fetch wrapper that auto-attaches and rotates the CSRF token for mutating requests. */
+  csrfFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   uploadDir: string;
   uploadAction: string;
   hasUserRootfs: boolean;
@@ -92,6 +92,23 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       setCsrfToken(newToken);
     }
   }, []);
+
+  const csrfFetch = useCallback(
+    async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const headers = new Headers(init?.headers);
+      if (!headers.has("x-csrf-token")) {
+        headers.set("x-csrf-token", csrfTokenRef.current);
+      }
+      const res = await fetch(input, { ...init, headers });
+      const newToken = res.headers.get("x-csrf-token");
+      if (newToken) {
+        csrfTokenRef.current = newToken;
+        setCsrfToken(newToken);
+      }
+      return res;
+    },
+    [],
+  );
 
   const eventQueueRef = useRef<SseEvent[]>([]);
   const [eventSeq, setEventSeq] = useState(0);
@@ -181,12 +198,9 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       const abortController = new AbortController();
       queryAbortRef.current = abortController;
       const executeStream = async () => {
-        const res = await fetch("/chat", {
+        const res = await csrfFetch("/chat", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-csrf-token": csrfTokenRef.current,
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             conversation_id: conversationId,
             content,
@@ -199,7 +213,6 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
           const msg = await res.text();
           throw new Error(msg || `HTTP ${res.status}`);
         }
-        refreshCsrfToken(res);
         await readFetchSseStream(res, taggedPush, vmId);
       };
       executeStream().catch((err: unknown) => {
@@ -211,7 +224,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
         }
       });
     },
-    [vmId, pushEvent, refreshCsrfToken],
+    [vmId, pushEvent, csrfFetch],
   );
 
   const abortQuery = useCallback(() => {
@@ -221,21 +234,17 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
 
   const post = useCallback(
     async (path: string, body: Record<string, unknown>) => {
-      const res = await fetch(path, {
+      const res = await csrfFetch(path, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfTokenRef.current,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || `HTTP ${res.status}`);
       }
-      refreshCsrfToken(res);
     },
-    [refreshCsrfToken],
+    [csrfFetch],
   );
 
   const sendStop = useCallback(
@@ -280,21 +289,17 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSession = useCallback(
     async (sessionId: string, projectDir: string) => {
-      const res = await fetch("/chat-transcript", {
+      const res = await csrfFetch("/chat-transcript", {
         method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfTokenRef.current,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           session_id: sessionId,
           project_dir: projectDir,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      refreshCsrfToken(res);
     },
-    [refreshCsrfToken],
+    [csrfFetch],
   );
 
   const listFiles = useCallback(async (path: string): Promise<FileEntry[]> => {
@@ -308,8 +313,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
     <SseContext.Provider
       value={{
         vmId,
-        csrfToken,
-        refreshCsrfToken,
+        csrfFetch,
         uploadDir,
         uploadAction,
         hasUserRootfs,
