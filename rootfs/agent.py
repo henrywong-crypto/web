@@ -183,6 +183,13 @@ def handle_query(msg: dict, writer: asyncio.StreamWriter) -> None:
     task_id = msg.get("task_id") or str(uuid.uuid4())
     conversation_id = msg.get("conversation_id", "")
     work_dir = resolve_work_dir(msg.get("work_dir"))
+    # Cancel any existing session with the same task_id to prevent orphaned tasks
+    existing = _sessions.get(task_id)
+    if existing and not existing.task.done():
+        log(f"duplicate task_id {task_id!r}, cancelling previous session")
+        existing.cancelled = True
+        existing.task.cancel()
+        _sessions.pop(task_id, None)
     token1 = _emit_writer.set(writer)
     token2 = _emit_session_id.set(task_id)
     task = asyncio.create_task(
@@ -317,7 +324,15 @@ async def run_query(
         session.pending_question_data = question_data
         emit_sse("ask_user_question", question_data)
         log("PreToolUse AskUserQuestion: waiting for answer")
-        answers = await session.pending_question
+        try:
+            answers = await asyncio.wait_for(
+                session.pending_question, timeout=QUESTION_TIMEOUT_SECS
+            )
+        except asyncio.TimeoutError:
+            log("PreToolUse AskUserQuestion: timed out waiting for answer")
+            session.pending_question = None
+            session.pending_question_data = None
+            raise
         session.pending_question = None
         session.pending_question_data = None
         log("PreToolUse AskUserQuestion: answered")

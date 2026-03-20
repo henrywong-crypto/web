@@ -839,6 +839,95 @@ class TestHandleQuery(unittest.IsolatedAsyncioTestCase):
         agent._sessions.pop("wd-sub", None)
 
 
+class TestHandleQueryDuplicateTaskId(unittest.IsolatedAsyncioTestCase):
+    """handle_query cancels the old session when a duplicate task_id arrives."""
+
+    async def test_duplicate_task_id_cancels_previous_task(self):
+        async def long_running():
+            await asyncio.sleep(999)
+
+        old_task = asyncio.create_task(long_running())
+        old_writer = MockWriter()
+        task_id = "dup-task"
+        agent._sessions[task_id] = agent.Session(
+            task=old_task, writer=old_writer, conversation_id=""
+        )
+
+        new_writer = MockWriter()
+
+        async def fake_run_query(*args, **kwargs):
+            pass
+
+        with unittest.mock.patch.object(agent, "run_query", side_effect=fake_run_query):
+            agent.handle_query(
+                {"type": "query", "content": "hi", "task_id": task_id}, new_writer
+            )
+
+        try:
+            # Old task should be cancelled
+            self.assertGreater(old_task.cancelling(), 0)
+            # New session should be registered with the new writer
+            self.assertIn(task_id, agent._sessions)
+            self.assertIs(agent._sessions[task_id].writer, new_writer)
+        finally:
+            agent._sessions.pop(task_id, None)
+            old_task.cancel()
+
+    async def test_duplicate_task_id_sets_cancelled_flag_on_old_session(self):
+        async def long_running():
+            await asyncio.sleep(999)
+
+        old_task = asyncio.create_task(long_running())
+        old_writer = MockWriter()
+        task_id = "dup-flag"
+        old_session = agent.Session(
+            task=old_task, writer=old_writer, conversation_id=""
+        )
+        agent._sessions[task_id] = old_session
+
+        new_writer = MockWriter()
+
+        async def fake_run_query(*args, **kwargs):
+            pass
+
+        with unittest.mock.patch.object(agent, "run_query", side_effect=fake_run_query):
+            agent.handle_query(
+                {"type": "query", "content": "hi", "task_id": task_id}, new_writer
+            )
+
+        try:
+            self.assertTrue(old_session.cancelled)
+        finally:
+            agent._sessions.pop(task_id, None)
+            old_task.cancel()
+
+    async def test_duplicate_task_id_with_done_task_does_not_error(self):
+        """If the old task already completed, handle_query should still succeed."""
+        done_task = asyncio.create_task(asyncio.sleep(0))
+        await done_task
+        old_writer = MockWriter()
+        task_id = "dup-done"
+        agent._sessions[task_id] = agent.Session(
+            task=done_task, writer=old_writer, conversation_id=""
+        )
+
+        new_writer = MockWriter()
+
+        async def fake_run_query(*args, **kwargs):
+            pass
+
+        with unittest.mock.patch.object(agent, "run_query", side_effect=fake_run_query):
+            agent.handle_query(
+                {"type": "query", "content": "hi", "task_id": task_id}, new_writer
+            )
+
+        try:
+            self.assertIn(task_id, agent._sessions)
+            self.assertIs(agent._sessions[task_id].writer, new_writer)
+        finally:
+            agent._sessions.pop(task_id, None)
+
+
 # ── Stream event processing tests ─────────────────────────────────────────
 
 
@@ -2108,6 +2197,58 @@ class TestAskUserQuestionHook(unittest.IsolatedAsyncioTestCase):
             e for e in writer.written_events() if e["event"] == "ask_user_question"
         ]
         self.assertEqual(aq_events, [])
+
+    async def test_hook_raises_timeout_error_when_no_answer_arrives(self):
+        """If nobody answers within QUESTION_TIMEOUT_SECS, the hook must raise
+        asyncio.TimeoutError rather than hanging forever."""
+        task_id = "aq-timeout"
+        writer = MockWriter()
+        hook_errors = []
+
+        # Temporarily set a very short timeout so the test doesn't take 3600s
+        original_timeout = agent.QUESTION_TIMEOUT_SECS
+        agent.QUESTION_TIMEOUT_SECS = 0.05  # 50ms
+
+        async def call_hook(hook):
+            try:
+                await hook({"tool_input": {"questions": []}}, "req-to", None)
+            except asyncio.TimeoutError:
+                hook_errors.append("timeout")
+
+        try:
+            await self._run_with_hook(task_id, writer, call_hook)
+        finally:
+            agent.QUESTION_TIMEOUT_SECS = original_timeout
+
+        self.assertEqual(hook_errors, ["timeout"])
+
+    async def test_hook_clears_pending_state_on_timeout(self):
+        """After a timeout, pending_question and pending_question_data must be
+        cleared so the session doesn't hold stale references."""
+        task_id = "aq-timeout-cleanup"
+        writer = MockWriter()
+
+        original_timeout = agent.QUESTION_TIMEOUT_SECS
+        agent.QUESTION_TIMEOUT_SECS = 0.05
+
+        session_ref = [None]
+
+        async def call_hook(hook):
+            try:
+                await hook({"tool_input": {"questions": []}}, "req-tc", None)
+            except asyncio.TimeoutError:
+                session_ref[0] = agent._sessions.get(task_id)
+
+        try:
+            await self._run_with_hook(task_id, writer, call_hook)
+        finally:
+            agent.QUESTION_TIMEOUT_SECS = original_timeout
+
+        # The session may have been popped by run_query's finally block,
+        # but if we captured it during the hook, pending state should be None
+        if session_ref[0] is not None:
+            self.assertIsNone(session_ref[0].pending_question)
+            self.assertIsNone(session_ref[0].pending_question_data)
 
 
 if __name__ == "__main__":
