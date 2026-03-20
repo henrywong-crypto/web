@@ -119,6 +119,7 @@ export default function ChatComposer({
     if (pendingFiles.length > 0 && uploadAction) {
       setUploading(true);
       const uploadedPaths: string[] = [];
+      let currentToken = csrfToken;
       for (const file of pendingFiles) {
         const formData = new FormData();
         formData.append(
@@ -129,10 +130,12 @@ export default function ChatComposer({
         try {
           const res = await fetch(uploadAction, {
             method: "POST",
-            headers: { "x-csrf-token": csrfToken },
+            headers: { "x-csrf-token": currentToken },
             body: formData,
           });
           refreshCsrfToken(res);
+          const rotated = res.headers.get("x-csrf-token");
+          if (rotated) currentToken = rotated;
           if (res.ok)
             uploadedPaths.push(
               uploadDir.replace(/\/$/, "") +
