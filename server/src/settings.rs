@@ -33,7 +33,7 @@ pub(crate) async fn get_settings_handler(
     )
     .await?;
     Ok(Json(SettingsResponse {
-        uses_bedrock: if state.config.use_iam_creds { true } else { vm_settings.uses_bedrock },
+        uses_bedrock: state.config.use_iam_creds,
         has_api_key: if state.config.use_iam_creds { false } else { vm_settings.has_api_key },
         base_url: state.config.anthropic_base_url.clone(),
         model: vm_settings.model,

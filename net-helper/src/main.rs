@@ -106,6 +106,14 @@ fn cmd_tap_delete(tap_name: &str) -> Result<()> {
 fn cmd_setup_nat(iface: &str) -> Result<()> {
     std::fs::write("/proc/sys/net/ipv4/ip_forward", "1").context("failed to enable ip_forward")?;
     run_cmd("iptables", &["-P", "FORWARD", "ACCEPT"])?;
+    // Block VMs from reaching the host EC2 IMDS so they cannot acquire
+    // IAM credentials directly (Bedrock access should only come via MMDS
+    // when explicitly configured).
+    let _ = Command::new("iptables")
+        .args(["-D", "FORWARD", "-s", "172.16.0.0/16", "-d", "169.254.169.254", "-j", "DROP"])
+        .stderr(std::process::Stdio::null())
+        .status();
+    run_cmd("iptables", &["-I", "FORWARD", "-s", "172.16.0.0/16", "-d", "169.254.169.254", "-j", "DROP"])?;
     let _ = Command::new("iptables")
         .args([
             "-t",
