@@ -77,6 +77,7 @@ pub(crate) async fn exchange_gateway_code(
     #[derive(Deserialize)]
     struct TokenResponse {
         access_token: String,
+        id_token: Option<String>,
     }
 
     let token_resp: TokenResponse = resp
@@ -84,7 +85,9 @@ pub(crate) async fn exchange_gateway_code(
         .await
         .context("failed to parse gateway cognito token response")?;
 
-    Ok(token_resp.access_token)
+    // Prefer id_token as some gateways validate identity claims rather than
+    // access token scopes.
+    Ok(token_resp.id_token.unwrap_or(token_resp.access_token))
 }
 
 /// Calls the gateway's `POST /api/v1/api-keys` endpoint with a Bearer token.
