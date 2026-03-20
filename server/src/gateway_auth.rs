@@ -109,9 +109,12 @@ pub(crate) async fn provision_gateway_api_key(
         .bearer_auth(access_token)
         .send()
         .await
-        .context("failed to call gateway api-keys endpoint")?
-        .error_for_status()
-        .context("gateway api-keys endpoint returned error")?;
+        .context("failed to call gateway api-keys endpoint")?;
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        anyhow::bail!("gateway api-keys endpoint returned {status}: {body}");
+    }
 
     #[derive(Deserialize)]
     struct ApiKeyResponse {
