@@ -175,7 +175,7 @@ async fn add_security_headers(request: Request, next: Next) -> Response {
              script-src 'self'; \
              style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
              connect-src 'self'; \
-             img-src 'self' data:; \
+             img-src 'self' data: blob:; \
              font-src 'self' data: https://fonts.gstatic.com",
         ),
     );
