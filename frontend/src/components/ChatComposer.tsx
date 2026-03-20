@@ -121,22 +121,16 @@ export default function ChatComposer({
       const uploadedPaths: string[] = [];
       for (const file of pendingFiles) {
         const formData = new FormData();
-        formData.append(
-          "path",
-          uploadDir.replace(/\/$/, "") + "/" + file.name.replace(/[/\\]/g, "_"),
-        );
         formData.append("file", file);
         try {
           const res = await csrfFetch(uploadAction, {
             method: "POST",
             body: formData,
           });
-          if (res.ok)
-            uploadedPaths.push(
-              uploadDir.replace(/\/$/, "") +
-                "/" +
-                file.name.replace(/[/\\]/g, "_"),
-            );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.path) uploadedPaths.push(data.path);
+          }
         } catch (err) {
           console.error("File upload failed", err);
         }
