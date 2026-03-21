@@ -347,6 +347,12 @@ async def run_query(
         cwd=work_dir,
         setting_sources=["user"],
         can_use_tool=handle_tool_permission,
+        mcp_servers={
+            "mcp": {
+                "type": "http",
+                "url": "http://localhost:8443/mcp",
+            },
+        },
         hooks={
             "PreToolUse": [
                 HookMatcher(
