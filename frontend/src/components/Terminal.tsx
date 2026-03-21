@@ -93,9 +93,13 @@ export default function Terminal({ visible }: { visible: boolean }) {
     if (unmountedRef.current) return;
     const attempt = reconnectAttemptRef.current;
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-      // Retries exhausted — the vmId is likely stale (VM was idle-swept and
-      // replaced).  Reload so the server assigns a fresh VM with a new ID.
-      window.location.reload();
+      // Stop retrying — don't reload the page, as the VM may be gone and
+      // reloading would trigger a provision loop.  The user can still interact
+      // with the rest of the UI (e.g. the Reset button) and refresh manually.
+      const term = termRef.current;
+      if (term) {
+        term.write("\r\n\x1b[2munable to reconnect\x1b[0m\r\n");
+      }
       return;
     }
     const delay = Math.min(
