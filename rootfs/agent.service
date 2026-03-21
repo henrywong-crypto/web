@@ -11,6 +11,7 @@ Restart=always
 RestartSec=2
 StandardOutput=append:/var/log/agent.log
 StandardError=append:/var/log/agent.log
+Environment=HOME=/home/ubuntu
 Environment=PYTHONUNBUFFERED=1
 
 [Install]
