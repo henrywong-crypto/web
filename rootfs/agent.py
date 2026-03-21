@@ -345,7 +345,7 @@ async def run_query(
 
     options = ClaudeAgentOptions(
         cwd=work_dir,
-        env={"HOME": os.environ.get("HOME", "/home/ubuntu"), "PATH": os.environ.get("PATH", "")},
+        setting_sources=["user"],
         can_use_tool=handle_tool_permission,
         hooks={
             "PreToolUse": [
