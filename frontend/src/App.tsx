@@ -49,7 +49,6 @@ function AppContent() {
     deleteConversation,
     deleteSession,
     syncConversationsFromHistory,
-    vmConnected,
   } = useSse();
   const [activeTab, setActiveTab] = useState<ViewTab>("chat");
   const [selectedConversation, setSelectedConversation] =
@@ -183,26 +182,6 @@ function AppContent() {
         onToggleSidebar={() => setShowMobileSidebar((v) => !v)}
         onFilesOpen={() => setShowFilesPanel(true)}
       />
-
-      {!vmConnected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="mx-4 max-w-sm rounded-lg border border-border bg-card p-8 text-center shadow-2xl">
-            <h2 className="mb-2 text-lg font-semibold text-foreground">
-              Connection Lost
-            </h2>
-            <p className="mb-6 text-sm text-muted-foreground">
-              The connection to the virtual machine was lost. This may be due to
-              a VM restart, network issue, or idle timeout.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Reconnect
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

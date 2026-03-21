@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Terminal as TerminalIcon } from "lucide-react";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { Terminal as XTerm } from "@xterm/xterm";
@@ -12,41 +12,114 @@ const TERMINAL_OPTIONS: ITerminalOptions = {
   fontSize: 14,
 };
 
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+const MAX_RECONNECT_ATTEMPTS = 10;
+
+function buildWsUrl(vmId: string): string {
+  const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${wsProto}//${window.location.host}/ws/${encodeURIComponent(vmId)}`;
+}
+
 export default function Terminal({ visible }: { visible: boolean }) {
-  const { vmId, setVmConnected } = useSse();
+  const { vmId } = useSse();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const initializedRef = useRef(false);
   const xtermAttachedRef = useRef(false);
+  // Buffer WS messages received before xterm is attached
+  const messageBufferRef = useRef<ArrayBuffer[]>([]);
+  // Track the latest onData disposable so we can re-wire on reconnect
+  const dataDisposableRef = useRef<{ dispose(): void } | null>(null);
+  // Reconnect state
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const unmountedRef = useRef(false);
 
-  // Eagerly open WS on mount for health monitoring
-  useEffect(() => {
-    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(
-      `${wsProto}//${window.location.host}/ws/${encodeURIComponent(vmId)}`,
-    );
-    ws.binaryType = "arraybuffer";
+  // Wire (or re-wire) a WS to the xterm instance + health monitoring
+  const wireWs = useCallback((ws: WebSocket) => {
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      setVmConnected(true);
-    };
-
-    ws.onclose = () => {
-      setVmConnected(false);
+    const sendResize = () => {
       const term = termRef.current;
-      if (term) {
-        term.write("\r\n\x1b[2mconnection closed\x1b[0m\r\n");
+      if (term && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({ type: "resize", rows: term.rows, cols: term.cols }),
+        );
       }
     };
 
+    ws.addEventListener("open", () => {
+      reconnectAttemptRef.current = 0;
+      const term = termRef.current;
+      if (term) {
+        // Re-wire input to the new WS
+        dataDisposableRef.current?.dispose();
+        dataDisposableRef.current = term.onData((d) =>
+          ws.send(new TextEncoder().encode(d)),
+        );
+        sendResize();
+      }
+    });
+
+    ws.addEventListener("close", () => {
+      const term = termRef.current;
+      if (term) {
+        term.write("\r\n\x1b[2mreconnecting…\x1b[0m\r\n");
+      }
+      scheduleReconnect();
+    });
+
+    ws.addEventListener("message", (e: MessageEvent) => {
+      const term = termRef.current;
+      if (term) {
+        term.write(new Uint8Array(e.data as ArrayBuffer));
+      } else {
+        messageBufferRef.current.push(e.data as ArrayBuffer);
+      }
+    });
+  }, []);
+
+  const scheduleReconnect = useCallback(() => {
+    if (unmountedRef.current) return;
+    const attempt = reconnectAttemptRef.current;
+    if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+      const term = termRef.current;
+      if (term) {
+        term.write("\r\n\x1b[2munable to reconnect\x1b[0m\r\n");
+      }
+      return;
+    }
+    const delay = Math.min(
+      RECONNECT_BASE_MS * Math.pow(2, attempt),
+      RECONNECT_MAX_MS,
+    );
+    reconnectAttemptRef.current = attempt + 1;
+    reconnectTimerRef.current = setTimeout(() => {
+      if (unmountedRef.current) return;
+      const ws = new WebSocket(buildWsUrl(vmId));
+      ws.binaryType = "arraybuffer";
+      wireWs(ws);
+    }, delay);
+  }, [vmId, wireWs]);
+
+  // Open initial WS eagerly on mount
+  useEffect(() => {
+    unmountedRef.current = false;
+    const ws = new WebSocket(buildWsUrl(vmId));
+    ws.binaryType = "arraybuffer";
+    wireWs(ws);
+
     return () => {
-      ws.close();
+      unmountedRef.current = true;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [vmId, setVmConnected]);
+  }, [vmId, wireWs]);
 
   const attachXterm = useCallback(() => {
     if (xtermAttachedRef.current) return;
@@ -63,6 +136,12 @@ export default function Terminal({ visible }: { visible: boolean }) {
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
+    // Replay any buffered messages
+    for (const buf of messageBufferRef.current) {
+      term.write(new Uint8Array(buf));
+    }
+    messageBufferRef.current = [];
+
     const ws = wsRef.current;
     if (!ws) return;
 
@@ -74,22 +153,24 @@ export default function Terminal({ visible }: { visible: boolean }) {
       }
     };
 
-    term.onResize(sendResize);
+    term.onResize(() => {
+      const currentWs = wsRef.current;
+      if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+        currentWs.send(
+          JSON.stringify({ type: "resize", rows: term.rows, cols: term.cols }),
+        );
+      }
+    });
 
-    // Attach data/message handlers to the existing WS
+    dataDisposableRef.current = term.onData((d) =>
+      ws.send(new TextEncoder().encode(d)),
+    );
+
     if (ws.readyState === WebSocket.OPEN) {
-      term.onData((d) => ws.send(new TextEncoder().encode(d)));
       sendResize();
     } else {
-      const origOnOpen = ws.onopen;
-      ws.onopen = (e) => {
-        if (origOnOpen) (origOnOpen as (e: Event) => void).call(ws, e);
-        term.onData((d) => ws.send(new TextEncoder().encode(d)));
-        sendResize();
-      };
+      ws.addEventListener("open", () => sendResize(), { once: true });
     }
-
-    ws.onmessage = (e) => term.write(new Uint8Array(e.data as ArrayBuffer));
 
     const ro = new ResizeObserver(() => fitAddon.fit());
     ro.observe(containerRef.current);

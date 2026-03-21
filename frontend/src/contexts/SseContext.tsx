@@ -58,8 +58,6 @@ interface SseContextValue {
   getQuestionsForConversation: (
     conversationId: string,
   ) => StoredQuestion | null;
-  vmConnected: boolean;
-  setVmConnected: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const SseContext = createContext<SseContextValue | null>(null);
@@ -149,8 +147,6 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
 
   const { storeQuestion, clearQuestion, getQuestionsForConversation } =
     useQuestionStorage();
-
-  const [vmConnected, setVmConnected] = useState(true);
 
   const esRef = useRef<EventSource | null>(null);
   const queryAbortRef = useRef<AbortController | null>(null);
@@ -350,8 +346,6 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
         storeQuestion,
         clearQuestion,
         getQuestionsForConversation,
-        vmConnected,
-        setVmConnected,
       }}
     >
       {children}
