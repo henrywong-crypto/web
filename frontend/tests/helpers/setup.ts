@@ -160,7 +160,8 @@ export interface SettingsData {
 
 // ── App HTML ──────────────────────────────────────────────────────────────
 
-function buildAppHtml(hasUserRootfs: boolean): string {
+function buildAppHtml(hasUserRootfs: boolean, vmId?: string): string {
+  const effectiveVmId = vmId ?? VM_ID;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -171,7 +172,7 @@ function buildAppHtml(hasUserRootfs: boolean): string {
 </head>
 <body class="flex h-screen overflow-hidden bg-background text-foreground">
   <div id="app-config" hidden
-    data-vm-id="${VM_ID}"
+    data-vm-id="${effectiveVmId}"
     data-csrf-token="${CSRF_TOKEN}"
     data-upload-dir="/tmp"
     data-upload-action="/chat-upload"
@@ -253,6 +254,8 @@ export interface SetupOpts {
   renewGatewayKeyError?: boolean;
   /** When set, POST /api/renew-gateway-key returns a redirect URL. */
   renewGatewayKeyRedirect?: string;
+  /** Override the vmId in app-config. Defaults to VM_ID ("test-vm"). Set to "" to test provisioning flow. */
+  vmId?: string;
 }
 
 export async function setupApp(
@@ -307,7 +310,7 @@ export async function setupApp(
 
   // ── App HTML page ────────────────────────────────────────────────────────
   await page.route("http://localhost/", (route) =>
-    route.fulfill({ status: 200, contentType: "text/html", body: buildAppHtml(opts.hasUserRootfs ?? false) }),
+    route.fulfill({ status: 200, contentType: "text/html", body: buildAppHtml(opts.hasUserRootfs ?? false, opts.vmId) }),
   );
 
   // ── Static files ────────────────────────────────────────────────────────
@@ -491,8 +494,12 @@ export async function setupApp(
 
   // ── Load the app ──────────────────────────────────────────────────────────
   await page.goto("http://localhost/", { waitUntil: "domcontentloaded" });
-  // Wait for React to render the composer
-  await page.waitForSelector('textarea[placeholder="Message Claude…"]');
+  // Wait for React to render — either the composer (VM ready) or loading spinner
+  if (opts.vmId === "") {
+    await page.waitForSelector("text=Starting environment");
+  } else {
+    await page.waitForSelector('textarea[placeholder="Message Claude…"]');
+  }
 
   return {
     sendSseEvents: (events) => {

@@ -117,6 +117,7 @@ export default function Terminal({ visible }: { visible: boolean }) {
 
   // Open initial WS eagerly on mount
   useEffect(() => {
+    if (!vmId) return;
     unmountedRef.current = false;
     const ws = new WebSocket(buildWsUrl(vmId));
     ws.binaryType = "arraybuffer";

@@ -20,6 +20,7 @@ import { useQuestionStorage } from "../hooks/useQuestionStorage";
 
 interface SseContextValue {
   vmId: string;
+  vmReady: boolean;
   /** Fetch wrapper that auto-attaches and rotates the CSRF token for mutating requests. */
   csrfFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   uploadDir: string;
@@ -81,7 +82,10 @@ function readAppConfig(): {
 
 export function SseProvider({ children }: { children: React.ReactNode }) {
   const config = useRef(readAppConfig());
-  const { vmId, uploadDir, uploadAction, hasUserRootfs } = config.current;
+  const { uploadDir, uploadAction, hasUserRootfs } = config.current;
+
+  const [vmId, setVmId] = useState(config.current.vmId);
+  const vmReady = vmId !== "";
 
   const csrfTokenRef = useRef(config.current.csrfToken);
   const [csrfToken, setCsrfToken] = useState(config.current.csrfToken);
@@ -93,6 +97,30 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       setCsrfToken(newToken);
     }
   }, []);
+
+  // Poll /api/vm-status until the VM is ready
+  useEffect(() => {
+    if (vmId !== "") return;
+    let cancelled = false;
+    const poll = async () => {
+      while (!cancelled) {
+        try {
+          const res = await fetch("/api/vm-status");
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (data.status === "ready" && data.vm_id) {
+            setVmId(data.vm_id);
+            return;
+          }
+        } catch {
+          // ignore, retry
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [vmId]);
 
   const csrfFetch = useCallback(
     async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -324,6 +352,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
     <SseContext.Provider
       value={{
         vmId,
+        vmReady,
         csrfFetch,
         uploadDir,
         uploadAction,

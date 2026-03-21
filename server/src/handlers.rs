@@ -143,31 +143,105 @@ fn remove_user_vm(vms: &VmRegistry, user_id: Uuid) -> Result<()> {
 }
 
 pub(crate) async fn get_or_create_terminal(
-    user_vm: UserVm,
+    user: User,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    // If a gateway API key is stored in session, ensure it's written to the VM.
-    // This handles both initial provisioning and VM reset/reprovisioning.
-    if let Ok(Some(gateway_key)) = session.get::<String>("gateway_api_key").await {
-        let content = chat_settings::build_api_key_settings_json(
-            &gateway_key,
-            state.config.anthropic_base_url.as_deref(),
-            &state.config.anthropic_default_haiku_model,
-            &state.config.anthropic_default_sonnet_model,
-            &state.config.anthropic_default_opus_model,
-            None,
-        )?;
-        chat_settings::set_vm_settings(
-            user_vm.guest_ip,
-            &state.config.ssh_key_path,
-            &state.config.ssh_user,
-            &state.config.vm_host_key_path,
-            &content,
-        )
-        .await?;
+    let db_user = get_user_by_email(&state.db, &user.email)
+        .await?
+        .ok_or_else(|| anyhow!("user not found"))?;
+    let has_user_rootfs = find_user_rootfs(&state.config.user_rootfs_dir, db_user.id).is_some();
+    let csrf_token = get_csrf_token(&session).await?;
+    // Serve the page immediately with vm_id="" — the frontend will poll /api/vm-status
+    Ok(Html(render_terminal_page(
+        "",
+        &csrf_token,
+        &state.config.upload_dir,
+        has_user_rootfs,
+    ))
+    .into_response())
+}
+
+#[derive(Serialize)]
+struct VmStatusResponse {
+    status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vm_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    has_user_rootfs: Option<bool>,
+}
+
+pub(crate) async fn vm_status_handler(
+    user: User,
+    session: Session,
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    let db_user = get_user_by_email(&state.db, &user.email)
+        .await?
+        .ok_or_else(|| anyhow!("user not found"))?;
+    let user_id = db_user.id;
+
+    // Check if VM already exists
+    if let Some((vm_id, guest_ip)) = find_user_vm(&state.vms, user_id)? {
+        // Write gateway settings if session has a key
+        if let Ok(Some(gateway_key)) = session.get::<String>("gateway_api_key").await {
+            let content = chat_settings::build_api_key_settings_json(
+                &gateway_key,
+                state.config.anthropic_base_url.as_deref(),
+                &state.config.anthropic_default_haiku_model,
+                &state.config.anthropic_default_sonnet_model,
+                &state.config.anthropic_default_opus_model,
+                None,
+            )?;
+            chat_settings::set_vm_settings(
+                guest_ip,
+                &state.config.ssh_key_path,
+                &state.config.ssh_user,
+                &state.config.vm_host_key_path,
+                &content,
+            )
+            .await?;
+        }
+        let has_user_rootfs =
+            find_user_rootfs(&state.config.user_rootfs_dir, user_id).is_some();
+        return Ok(Json(VmStatusResponse {
+            status: "ready",
+            vm_id: Some(vm_id),
+            has_user_rootfs: Some(has_user_rootfs),
+        })
+        .into_response());
     }
-    build_terminal_response(&session, &state, user_vm.user_id, &user_vm.vm_id).await
+
+    // Check if already provisioning
+    {
+        let provisioning = state
+            .provisioning_users
+            .lock()
+            .map_err(|_| anyhow!("provisioning lock poisoned"))?;
+        if provisioning.contains(&user_id) {
+            return Ok(Json(VmStatusResponse {
+                status: "provisioning",
+                vm_id: None,
+                has_user_rootfs: None,
+            })
+            .into_response());
+        }
+    }
+
+    // Spawn provisioning in background
+    let state_clone = state.clone();
+    tokio::spawn(async move {
+        if let Err(e) = provision_new_vm(&state_clone, user_id).await {
+            error!("background vm provisioning failed for {user_id}: {}", e.0);
+        }
+    });
+
+    Ok(Json(VmStatusResponse {
+        status: "provisioning",
+        vm_id: None,
+        has_user_rootfs: None,
+    })
+    .into_response())
 }
 
 /// Atomically reserves a provisioning slot for a user by locking both `vms` and
