@@ -158,17 +158,14 @@ pub(crate) async fn get_or_create_terminal(
             &state.config.anthropic_default_opus_model,
             None,
         )?;
-        if let Err(e) = chat_settings::set_vm_settings(
+        chat_settings::set_vm_settings(
             user_vm.guest_ip,
             &state.config.ssh_key_path,
             &state.config.ssh_user,
             &state.config.vm_host_key_path,
             &content,
         )
-        .await
-        {
-            tracing::warn!("failed to write gateway key to VM: {e}");
-        }
+        .await?;
     }
     build_terminal_response(&session, &state, user_vm.user_id, &user_vm.vm_id).await
 }

@@ -5,7 +5,7 @@ use axum::{
 use chat_settings::{build_api_key_settings_json, set_vm_settings};
 use serde::Deserialize;
 use tower_sessions::Session;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 use crate::{
     gateway_auth::{exchange_gateway_code, provision_gateway_api_key},
@@ -44,34 +44,27 @@ pub(crate) async fn gateway_callback_handler(
     }
 
     // Exchange code for access token
-    let access_token = match exchange_gateway_code(&query.code, &state.config).await {
-        Ok(token) => token,
-        Err(e) => {
-            error!("gateway code exchange failed: {e}");
-            return Ok(Redirect::to("/").into_response());
-        }
-    };
+    let access_token = exchange_gateway_code(&query.code, &state.config).await?;
 
     // Provision API key
-    let api_key = match provision_gateway_api_key(
-        &access_token,
-        &state.config.gateway_api_url,
-    )
-    .await
-    {
-        Ok(key) => key,
-        Err(e) => {
-            error!("gateway key provisioning failed: {e}");
-            return Ok(Redirect::to("/").into_response());
-        }
-    };
+    let api_key =
+        provision_gateway_api_key(&access_token, &state.config.gateway_api_url).await?;
 
     info!("gateway API key provisioned successfully");
 
     // Store access token and key in session for future use
-    let _ = session.insert("gateway_access_token", &access_token).await;
-    let _ = session.insert("gateway_api_key", &api_key).await;
-    let _ = session.insert("gateway_key_provisioned", true).await;
+    session
+        .insert("gateway_access_token", &access_token)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to store gateway_access_token in session: {e}"))?;
+    session
+        .insert("gateway_api_key", &api_key)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to store gateway_api_key in session: {e}"))?;
+    session
+        .insert("gateway_key_provisioned", true)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to store gateway_key_provisioned in session: {e}"))?;
 
     // Write key to VM
     let content = build_api_key_settings_json(
@@ -83,17 +76,14 @@ pub(crate) async fn gateway_callback_handler(
         None,
     )?;
 
-    if let Err(e) = set_vm_settings(
+    set_vm_settings(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
         &state.config.vm_host_key_path,
         &content,
     )
-    .await
-    {
-        warn!("failed to write gateway key to VM: {e}");
-    }
+    .await?;
 
     Ok(Redirect::to("/").into_response())
 }

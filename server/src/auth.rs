@@ -93,9 +93,10 @@ pub(crate) async fn get_callback_handler(
     Ok(Redirect::to("/").into_response())
 }
 
-pub(crate) async fn get_logout_handler(session: Session) -> impl IntoResponse {
-    if let Err(e) = session.delete().await {
-        warn!("session delete failed during logout: {e}");
-    }
-    Redirect::to("/login")
+pub(crate) async fn get_logout_handler(session: Session) -> Result<Response, AppError> {
+    session
+        .delete()
+        .await
+        .map_err(|e| anyhow::anyhow!("session delete failed during logout: {e}"))?;
+    Ok(Redirect::to("/login").into_response())
 }

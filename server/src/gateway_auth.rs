@@ -160,7 +160,12 @@ pub(crate) async fn renew_gateway_key_handler(
                 )
                 .await?;
                 // Store the new key in session for VM reset handling
-                let _ = session.insert("gateway_api_key", &api_key).await;
+                session
+                    .insert("gateway_api_key", &api_key)
+                    .await
+                    .map_err(|e| {
+                        anyhow::anyhow!("failed to store gateway_api_key in session: {e}")
+                    })?;
                 return Ok(Json(serde_json::json!({"status": "ok"})).into_response());
             }
             Err(e) => {
