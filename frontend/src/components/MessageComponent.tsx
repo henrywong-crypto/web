@@ -45,20 +45,20 @@ const MessageComponent = memo(
         >
           <div className="relative max-w-[75%] sm:max-w-lg">
             {hovered && (
-              <div className="absolute -left-8 top-1">
+              <div className="fade-in absolute -left-8 top-1">
                 <MessageCopyControl
                   content={message.content}
                   messageType="user"
                 />
               </div>
             )}
-            <div className="rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-base text-primary-foreground shadow-sm">
+            <div className="rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-base text-primary-foreground shadow-lg shadow-primary/20 ring-1 ring-primary/25">
               <div className="whitespace-pre-wrap break-words leading-relaxed">
                 {message.content}
               </div>
             </div>
-            <div className="mt-0.5 pr-0.5 text-right">
-              <span className="text-xs text-muted-foreground/50">
+            <div className="mt-1 pr-0.5 text-right">
+              <span className="text-[11px] tracking-wide text-muted-foreground/35">
                 {formattedTime}
               </span>
             </div>
@@ -70,8 +70,8 @@ const MessageComponent = memo(
     if (message.type === "error") {
       return (
         <div className="px-4 py-0.5">
-          <div className="rounded-xl border border-destructive/30 bg-destructive/8 px-4 py-2.5 text-base text-destructive">
-            <span className="font-medium">Error: </span>
+          <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-base text-destructive shadow-sm">
+            <span className="font-semibold">Error: </span>
             {message.content}
           </div>
         </div>
@@ -83,7 +83,7 @@ const MessageComponent = memo(
       if (!message.content) return null;
       return (
         <div className={insideCard ? "py-0.5" : "px-4 py-0.5"}>
-          <details className="group rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+          <details className="group rounded-xl border border-primary/12 bg-primary/4 px-3 py-2.5">
             <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground">
               Thinking
             </summary>
@@ -129,13 +129,13 @@ const MessageComponent = memo(
       >
         {!isGrouped && (
           <div className="mb-2 flex items-center gap-2.5">
-            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold tracking-wider text-primary-foreground shadow-sm">
+            <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-primary text-[9px] font-bold tracking-wider text-primary-foreground shadow-sm shadow-primary/20">
               AI
             </div>
             <span className="text-sm font-semibold text-foreground">
               Claude
             </span>
-            <span className="text-xs text-muted-foreground/60">
+            <span className="text-xs text-muted-foreground/50">
               {formattedTime}
             </span>
             {hovered && (
@@ -199,7 +199,7 @@ function CodeBlock({ node, inline, className, children, ...props }: CodeBlockPro
     return (
       <code
         className={twMerge(
-          "whitespace-pre-wrap break-words rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-[0.9em]",
+          "whitespace-pre-wrap break-words rounded-md border border-border/60 bg-muted/60 px-1.5 py-0.5 font-mono text-[0.9em]",
           className,
         )}
         {...props}
@@ -224,9 +224,9 @@ function CodeBlock({ node, inline, className, children, ...props }: CodeBlockPro
   };
 
   return (
-    <div className="not-prose group relative my-3">
+    <div className="not-prose group relative my-3 overflow-hidden rounded-xl ring-1 ring-border/30">
       {language && language !== "text" && (
-        <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-gray-400">
+        <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-muted-foreground/50">
           {language}
         </div>
       )}
@@ -235,7 +235,7 @@ function CodeBlock({ node, inline, className, children, ...props }: CodeBlockPro
         onClick={handleCopy}
         title={copied ? "Copied!" : "Copy code"}
         aria-label={copied ? "Copied!" : "Copy code"}
-        className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-md border border-border bg-muted/80 px-2 py-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+        className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded-lg border border-border/60 bg-card/90 px-2 py-1 text-xs text-muted-foreground opacity-0 transition-opacity hover:bg-card hover:text-foreground focus:opacity-100 group-hover:opacity-100"
       >
         {copied ? (
           <>
@@ -271,7 +271,7 @@ function CodeBlock({ node, inline, className, children, ...props }: CodeBlockPro
         style={oneDark}
         customStyle={{
           margin: 0,
-          borderRadius: "0.5rem",
+          borderRadius: "0.75rem",
           fontSize: "0.875rem",
           padding: language && language !== "text" ? "2rem 1rem 1rem 1rem" : "1rem",
         }}
@@ -290,14 +290,14 @@ function CodeBlock({ node, inline, className, children, ...props }: CodeBlockPro
 const markdownComponents = {
   code: CodeBlock,
   blockquote: ({ children }: { children?: React.ReactNode }) => (
-    <blockquote className="my-2 border-l-4 border-primary/40 pl-4 italic text-muted-foreground">
+    <blockquote className="my-2 border-l-4 border-primary/30 pl-4 italic text-muted-foreground">
       {children}
     </blockquote>
   ),
   a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
     <a
       href={href}
-      className="text-primary hover:underline"
+      className="text-primary underline decoration-primary/30 underline-offset-[3px] hover:decoration-primary"
       target="_blank"
       rel="noopener noreferrer"
     >
@@ -308,15 +308,15 @@ const markdownComponents = {
     <div className="mb-2 last:mb-0">{children}</div>
   ),
   table: ({ children }: { children?: React.ReactNode }) => (
-    <div className="my-3 overflow-x-auto rounded-lg border border-border/60 bg-muted/30">
+    <div className="my-3 overflow-x-auto rounded-xl border border-border/50 bg-muted/20">
       <table className="min-w-full border-collapse">{children}</table>
     </div>
   ),
   thead: ({ children }: { children?: React.ReactNode }) => (
-    <thead className="bg-primary/10 border-b-2 border-primary/20">{children}</thead>
+    <thead className="bg-primary/8 border-b-2 border-primary/15">{children}</thead>
   ),
   tr: ({ children }: { children?: React.ReactNode }) => (
-    <tr className="border-b border-border/40 even:bg-muted/40">{children}</tr>
+    <tr className="border-b border-border/30 even:bg-muted/30">{children}</tr>
   ),
   th: ({ children }: { children?: React.ReactNode }) => (
     <th className="px-4 py-2.5 text-left text-[0.9375rem] font-semibold">{children}</th>
@@ -341,7 +341,7 @@ function MarkdownContent({ content }: { content: string }) {
             ...defaultSchema.attributes,
             code: [
               ...(defaultSchema.attributes?.code ?? []),
-              ["className", /^language-./],
+              ["className", /^language-[\w]+$/],
             ],
           },
         },

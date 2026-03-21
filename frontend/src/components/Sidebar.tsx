@@ -55,27 +55,27 @@ export default function Sidebar({
           md:relative md:flex md:w-60 md:flex-col md:border-r md:border-border md:bg-card
         `}
       >
-      <div className="flex h-11 items-center justify-between border-b border-border px-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      <div className="flex h-12 items-center justify-between border-b border-border px-3">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Conversations
         </span>
         <button
           onClick={onRefresh}
           title="Refresh conversations"
-          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <RotateCw className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      <div className="relative border-b border-border px-3 py-2">
-        <Search className="absolute left-5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      <div className="relative border-b border-border px-3 py-2.5">
+        <Search className="absolute left-5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
         <input
           type="text"
           placeholder="Search conversations…"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full rounded-md border border-border bg-background py-1 pl-7 pr-7 text-sm text-foreground placeholder-muted-foreground/50 focus:border-primary/40 focus:outline-none focus:ring-1 focus:ring-primary/20"
+          className="w-full rounded-xl border border-border bg-background py-1.5 pl-7 pr-7 text-sm text-foreground placeholder-muted-foreground/40 transition-shadow focus:border-primary/30 focus:outline-none focus:ring-2 focus:ring-primary/10"
         />
         {searchQuery && (
           <button
@@ -108,10 +108,10 @@ export default function Sidebar({
         )}
       </div>
 
-      <div className="border-t border-border p-2">
+      <div className="border-t border-border p-2.5">
         <button
           onClick={onNewChat}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/20 active:scale-[.98]"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow-md shadow-primary/20 hover:shadow-lg hover:shadow-primary/30 active:scale-[.98]"
         >
           <Plus className="h-4 w-4" />
           New Chat
@@ -141,7 +141,7 @@ function ConversationRow({
 
   return (
     <div
-      className={`group relative flex cursor-pointer items-center gap-2 px-3 py-2 text-sm ${
+      className={`group relative flex cursor-pointer items-center gap-2 px-3 py-2.5 text-sm transition-colors duration-100 ${
         isActive
           ? "border-l-2 border-primary bg-primary/8 pl-[10px] text-foreground"
           : "text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -167,7 +167,7 @@ function ConversationRow({
             e.stopPropagation();
             onDelete();
           }}
-          className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-destructive"
+          className="fade-in flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive"
         >
           <Trash2 className="h-3 w-3" />
         </button>

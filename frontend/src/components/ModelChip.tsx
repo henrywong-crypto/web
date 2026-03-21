@@ -21,6 +21,7 @@ export default function ModelChip() {
   const [open, setOpen] = useState(false);
   const [saveResult, setSaveResult] = useState<"success" | "error" | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,16 +45,30 @@ export default function ModelChip() {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
+  // Clean up close timer on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
+
   const handleChange = useCallback(async (value: string) => {
     setModel(value);
     setSaveResult(null);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
     try {
       const res = await csrfFetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model: value }),
       });
-      setSaveResult(res.ok ? "success" : "error");
+      const result = res.ok ? "success" : "error";
+      setSaveResult(result);
+      // Auto-close after brief feedback
+      closeTimerRef.current = setTimeout(() => {
+        setOpen(false);
+        setSaveResult(null);
+      }, 600);
     } catch (e) {
       console.error("Failed to update model", e);
       setSaveResult("error");
@@ -65,7 +80,7 @@ export default function ModelChip() {
       <button
         title="Change model"
         onClick={() => { setOpen((v) => !v); setSaveResult(null); }}
-        className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
       >
         {displayLabel(model)}
         <ChevronDown className="h-3 w-3 opacity-50" />
@@ -88,12 +103,15 @@ export default function ModelChip() {
               </button>
             ))}
           </div>
-          {saveResult === "success" && (
-            <p className="mt-1 text-center text-[10px] text-emerald-500">Updated</p>
-          )}
-          {saveResult === "error" && (
-            <p className="mt-1 text-center text-[10px] text-red-400">Failed</p>
-          )}
+          {/* Fixed-height status area to prevent layout shift */}
+          <div className="h-4 flex items-center justify-center">
+            {saveResult === "success" && (
+              <p className="fade-in text-center text-[10px] text-emerald-500">Updated</p>
+            )}
+            {saveResult === "error" && (
+              <p className="fade-in text-center text-[10px] text-red-400">Failed</p>
+            )}
+          </div>
         </div>
       )}
     </div>

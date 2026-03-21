@@ -178,7 +178,7 @@ export default function ChatComposer({
   }, []);
 
   return (
-    <div className="flex-shrink-0 border-t border-border bg-card/60 px-3 pb-3 pt-2">
+    <div className="flex-shrink-0 border-t border-border bg-card/70 px-3 pb-3 pt-2">
       <div className="mx-auto max-w-3xl">
         <div className="relative">
           {/* Pending file chips */}
@@ -190,7 +190,7 @@ export default function ChatComposer({
                 return (
                   <span
                     key={file.name + "-" + i}
-                    className="flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-sm text-foreground"
+                    className="flex items-center gap-1 rounded-full border border-border/60 bg-card px-2.5 py-1 text-sm text-foreground shadow-sm"
                   >
                     {thumbUrl ? (
                       <img src={thumbUrl} alt="" className="h-5 w-5 rounded object-cover" />
@@ -212,7 +212,7 @@ export default function ChatComposer({
           )}
 
           {/* Input row */}
-          <div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-3 py-2 shadow-sm focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20">
+          <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-2 shadow-lg shadow-black/8 transition-shadow duration-250 focus-within:border-primary/25 focus-within:shadow-xl focus-within:shadow-primary/8 focus-within:ring-2 focus-within:ring-primary/10">
             {/* File upload button */}
             <button
               type="button"
@@ -239,7 +239,7 @@ export default function ChatComposer({
               placeholder="Message Claude…"
               disabled={blocked}
               rows={1}
-              className="max-h-[260px] min-h-[32px] flex-1 resize-none bg-transparent py-[5px] text-base leading-snug text-foreground placeholder-muted-foreground/50 focus:outline-none disabled:opacity-60"
+              className="max-h-[260px] min-h-[32px] flex-1 resize-none bg-transparent py-[5px] text-base leading-snug text-foreground placeholder-muted-foreground/40 focus:outline-none disabled:opacity-60"
               style={{ height: "32px" }}
             />
 
@@ -254,7 +254,7 @@ export default function ChatComposer({
                 type="button"
                 onClick={onStop}
                 title="Stop (Esc)"
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-destructive text-destructive-foreground hover:opacity-90"
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-destructive text-destructive-foreground shadow-sm hover:opacity-90"
               >
                 <Square className="h-3.5 w-3.5" />
               </button>
@@ -266,7 +266,7 @@ export default function ChatComposer({
                   blocked || (!input.trim() && pendingFiles.length === 0)
                 }
                 title="Send"
-                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground hover:opacity-90 disabled:bg-muted disabled:text-muted-foreground"
+                className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-50 disabled:shadow-none"
               >
                 <Send className="h-3.5 w-3.5" />
               </button>

@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { pickValid, safeJsonParse } from "../utils/safeJson";
 
 export interface UiPreferences {
   autoExpandTools: boolean;
@@ -17,7 +18,7 @@ const DEFAULTS: UiPreferences = {
 function load(): UiPreferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) return pickValid(safeJsonParse(raw), DEFAULTS);
   } catch {
     // ignore
   }

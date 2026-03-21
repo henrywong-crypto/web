@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { safeJsonParse } from "../utils/safeJson";
 import type {
   Conversation,
   FileEntry,
@@ -158,10 +159,10 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
 
     let parsed: { task_id?: string; running_session_id?: string | null };
     try {
-      parsed = JSON.parse(saved) as {
+      parsed = safeJsonParse<{
         task_id?: string;
         running_session_id?: string | null;
-      };
+      }>(saved);
     } catch {
       localStorage.removeItem(storageKey);
       return;

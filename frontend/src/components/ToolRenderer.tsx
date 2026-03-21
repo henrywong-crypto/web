@@ -17,7 +17,7 @@ export default function ToolRenderer({
   autoExpandTools,
 }: ToolRendererProps) {
   return (
-    <div className="my-0.5 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+    <div className="my-0.5 overflow-hidden rounded-xl border border-border/60 bg-card shadow-md shadow-black/5 ring-1 ring-border/10">
       <ToolHeader
         toolName={toolName}
         toolInput={toolInput}
@@ -94,21 +94,21 @@ function ToolHeader({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/50 active:bg-accent/70"
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors duration-100 hover:bg-accent/50 active:bg-accent/70"
       >
-        <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+        <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground/60" />
         <span className="flex-1 truncate text-sm">
           <span className="font-medium text-muted-foreground">{toolName}</span>
           {summary && (
-            <span className="ml-2 font-mono text-xs text-foreground/60">
+            <span className="ml-2 font-mono text-xs text-foreground/50">
               {summary}
             </span>
           )}
         </span>
         {open ? (
-          <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
+          <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground/40" />
         ) : (
-          <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
+          <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/40" />
         )}
       </button>
 
@@ -121,7 +121,7 @@ function ToolHeader({
         />
       )}
       {open && !diffProps && (
-        <div className="border-t border-border px-3 py-2">
+        <div className="border-t border-border/60 px-3 py-2.5">
           <ToolInputBody toolName={toolName} toolInput={toolInput} />
         </div>
       )}
@@ -182,7 +182,7 @@ function GrepInputBody({ toolInput }: { toolInput: Record<string, unknown> }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       {typeof pattern === "string" && (
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground/80">
+        <code className="rounded-md bg-muted/60 px-1.5 py-0.5 font-mono text-foreground/80">
           /{pattern}/
         </code>
       )}
@@ -199,7 +199,7 @@ function GlobInputBody({ toolInput }: { toolInput: Record<string, unknown> }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       {typeof pattern === "string" && (
-        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground/80">
+        <code className="rounded-md bg-muted/60 px-1.5 py-0.5 font-mono text-foreground/80">
           {pattern}
         </code>
       )}
@@ -266,7 +266,7 @@ function ToolResultView({ result }: { result: ToolResult }) {
 
   return (
     <div
-      className={`border-t border-border px-3 py-2 ${result.isError ? "bg-destructive/5" : "bg-muted/30"}`}
+      className={`border-t border-border/60 px-3 py-2.5 ${result.isError ? "bg-destructive/5" : "bg-muted/15"}`}
     >
       {result.isError && (
         <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-destructive">

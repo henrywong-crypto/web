@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, Conversation } from "../types";
 import type { UiPreferences } from "../hooks/useUiPreferences";
+import { safeJsonParse } from "../utils/safeJson";
 import { useSse } from "../contexts/SseContext";
 import { useChatState } from "../hooks/useChatState";
 import { useSseHandlers } from "../hooks/useSseHandlers";
@@ -118,7 +119,7 @@ export default function ChatInterface({
       );
       if (cached) {
         try {
-          const msgs = JSON.parse(cached) as ChatMessage[];
+          const msgs = safeJsonParse<ChatMessage[]>(cached);
           if (msgs.length > 0) {
             setMessages(conversation.conversationId, msgs);
           }

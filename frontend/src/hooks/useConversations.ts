@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ChatSession, Conversation } from "../types";
+import { safeJsonParse } from "../utils/safeJson";
 
 function loadConversationsFromStorage(vmId: string): Conversation[] {
   try {
     const saved = localStorage.getItem(`conversations_${vmId}`);
-    return saved ? (JSON.parse(saved) as Conversation[]) : [];
+    return saved ? safeJsonParse<Conversation[]>(saved) : [];
   } catch {
     return [];
   }

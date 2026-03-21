@@ -1,4 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from "react";
+import { safeJsonParse } from "../utils/safeJson";
 import type {
   ChatMessage,
   ChatSession,
@@ -486,7 +487,7 @@ export function useSseHandlers(
           );
           if (savedMessages) {
             try {
-              inProgressMessages = JSON.parse(savedMessages) as ChatMessage[];
+              inProgressMessages = safeJsonParse<ChatMessage[]>(savedMessages);
               setMessages(conversation_id, inProgressMessages);
             } catch {
               /* ignore parse errors */
@@ -498,7 +499,7 @@ export function useSseHandlers(
             );
             if (convMessages) {
               try {
-                inProgressMessages = JSON.parse(convMessages) as ChatMessage[];
+                inProgressMessages = safeJsonParse<ChatMessage[]>(convMessages);
                 setMessages(conversation_id, inProgressMessages);
               } catch {
                 /* ignore parse errors */
