@@ -275,7 +275,7 @@ def install_claude_code(rootfs: Path) -> None:
     chroot_as_ubuntu(rootfs, CHROOT_USER_SCRIPT)
 
 
-def install_agent(rootfs: Path) -> None:
+def install_agent(rootfs: Path, mcp_url: str | None = None) -> None:
     opt = rootfs / "opt"
     opt.mkdir(exist_ok=True)
     shutil.copy(str(AGENT_PY), str(opt / "agent.py"))
@@ -284,7 +284,17 @@ def install_agent(rootfs: Path) -> None:
     # Install and enable the agent systemd service so agent.py starts on boot.
     systemd_system = rootfs / "etc/systemd/system"
     systemd_system.mkdir(parents=True, exist_ok=True)
-    shutil.copy(str(AGENT_SERVICE), str(systemd_system / "agent.service"))
+    service_dest = systemd_system / "agent.service"
+    shutil.copy(str(AGENT_SERVICE), str(service_dest))
+
+    # Inject MCP_URL into the systemd unit so the agent can discover the MCP server.
+    if mcp_url:
+        service_text = service_dest.read_text()
+        service_text = service_text.replace(
+            "Environment=PYTHONUNBUFFERED=1",
+            f"Environment=PYTHONUNBUFFERED=1\nEnvironment=MCP_URL={mcp_url}",
+        )
+        service_dest.write_text(service_text)
     multi_user_wants = systemd_system / "multi-user.target.wants"
     multi_user_wants.mkdir(exist_ok=True)
     service_link = multi_user_wants / "agent.service"
@@ -304,7 +314,7 @@ def install_agent(rootfs: Path) -> None:
             "-",
             "ubuntu",
             "-c",
-            "bash -lc '/usr/local/bin/uv run --with claude-agent-sdk"
+            "bash -lc '/usr/local/bin/uv run --with claude-agent-sdk --with aiohttp"
             ' python3 -c "import claude_agent_sdk"\'',
         ],
     )
@@ -541,6 +551,11 @@ def main() -> None:
         action="store_true",
         help="Skip the Firecracker smoke test after building",
     )
+    parser.add_argument(
+        "--mcp-url",
+        default=None,
+        help="MCP server URL (injected as MCP_URL env var in agent.service)",
+    )
     args = parser.parse_args()
 
     workdir = args.workdir or Path(tempfile.mkdtemp(prefix="fc-build-"))
@@ -572,7 +587,7 @@ def main() -> None:
     try:
         install_system_packages(rootfs)
         install_claude_code(rootfs)
-        install_agent(rootfs)
+        install_agent(rootfs, mcp_url=args.mcp_url)
     finally:
         unmount_binds(mounts)
 

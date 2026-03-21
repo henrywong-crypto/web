@@ -120,6 +120,11 @@ function ResetButton({ csrfFetch }: { csrfFetch: (input: RequestInfo | URL, init
       method: "POST",
     });
     if (res.ok || res.status === 303) {
+      // Clear cached conversations and messages so they don't reappear after reset
+      const keysToRemove = Object.keys(localStorage).filter(
+        (k) => k.startsWith("chat_messages_") || k.startsWith("conversations_") || k.startsWith("chat_running_task_")
+      );
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
       window.location.href = "/";
     }
   }, [csrfFetch]);

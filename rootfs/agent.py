@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.14"
-# dependencies = ["claude-agent-sdk"]
+# dependencies = ["claude-agent-sdk", "aiohttp"]
 # ///
 import asyncio
 import contextvars
@@ -8,12 +8,15 @@ import dataclasses
 import json
 import os
 import signal
+import ssl
 import sys
 import uuid
 from typing import Any
 
 SOCKET_PATH = "/tmp/agent.sock"
 QUESTION_TIMEOUT_SECS = 3600
+MCP_URL = os.environ.get("MCP_URL")
+LOCAL_MCP_PORT = 8443
 
 # Allowed root directories for work_dir. Populated at startup via _init_allowed_roots().
 _ALLOWED_WORK_DIR_ROOTS: list[str] = []
@@ -250,7 +253,71 @@ async def handle_connection(
         log("client disconnected")
 
 
+async def start_mcp_proxy(upstream_url: str, port: int) -> None:
+    """Run an aiohttp reverse proxy on localhost:port forwarding to upstream_url (SSL verify off)."""
+    from aiohttp import ClientSession, TCPConnector, web
+
+    no_verify_ssl = ssl.create_default_context()
+    no_verify_ssl.check_hostname = False
+    no_verify_ssl.verify_mode = ssl.CERT_NONE
+
+    connector = TCPConnector(ssl=no_verify_ssl)
+    upstream = ClientSession(connector=connector)
+
+    async def proxy_handler(request: web.Request) -> web.StreamResponse:
+        target = upstream_url.rstrip("/") + request.path_qs
+        body = await request.read()
+        async with upstream.request(
+            request.method,
+            target,
+            headers={k: v for k, v in request.headers.items() if k.lower() != "host"},
+            data=body,
+        ) as resp:
+            # Check if the upstream response uses chunked or streaming transfer
+            is_streaming = (
+                resp.headers.get("Transfer-Encoding", "").lower() == "chunked"
+                or "text/event-stream" in resp.headers.get("Content-Type", "")
+            )
+            if is_streaming:
+                response = web.StreamResponse(
+                    status=resp.status,
+                    headers={
+                        k: v
+                        for k, v in resp.headers.items()
+                        if k.lower() not in ("transfer-encoding", "content-length")
+                    },
+                )
+                await response.prepare(request)
+                async for chunk in resp.content.iter_any():
+                    await response.write(chunk)
+                await response.write_eof()
+                return response
+            else:
+                data = await resp.read()
+                return web.Response(
+                    body=data,
+                    status=resp.status,
+                    headers={
+                        k: v
+                        for k, v in resp.headers.items()
+                        if k.lower()
+                        not in ("transfer-encoding", "content-length", "content-encoding")
+                    },
+                )
+
+    app = web.Application()
+    app.router.add_route("*", "/{path_info:.*}", proxy_handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "localhost", port)
+    await site.start()
+    log(f"MCP proxy listening on localhost:{port} -> {upstream_url}")
+
+
 async def main():
+    if MCP_URL:
+        await start_mcp_proxy(MCP_URL, LOCAL_MCP_PORT)
+
     try:
         os.unlink(SOCKET_PATH)
     except FileNotFoundError:
@@ -343,16 +410,18 @@ async def run_query(
             }
         }
 
+    mcp_servers = {}
+    if MCP_URL:
+        mcp_servers["gemini-websearch"] = {
+            "type": "http",
+            "url": f"http://localhost:{LOCAL_MCP_PORT}/mcp",
+        }
+
     options = ClaudeAgentOptions(
         cwd=work_dir,
         setting_sources=["user"],
         can_use_tool=handle_tool_permission,
-        mcp_servers={
-            "mcp": {
-                "type": "http",
-                "url": "http://localhost:8443/mcp",
-            },
-        },
+        mcp_servers=mcp_servers,
         hooks={
             "PreToolUse": [
                 HookMatcher(
