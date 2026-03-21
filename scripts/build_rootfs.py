@@ -53,7 +53,6 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y curl logrotate socat
-loginctl enable-linger ubuntu || mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/ubuntu
 curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 """
 
@@ -276,7 +275,7 @@ def install_claude_code(rootfs: Path) -> None:
     chroot_as_ubuntu(rootfs, CHROOT_USER_SCRIPT)
 
 
-def install_agent(rootfs: Path) -> None:
+def install_agent(rootfs: Path, mcp_base_url: str | None = None) -> None:
     opt = rootfs / "opt"
     opt.mkdir(exist_ok=True)
     shutil.copy(str(AGENT_PY), str(opt / "agent.py"))
@@ -293,6 +292,36 @@ def install_agent(rootfs: Path) -> None:
     service_link = multi_user_wants / "agent.service"
     if not service_link.exists():
         service_link.symlink_to("../agent.service")
+
+    # Install socat MCP proxy service when an MCP base URL is configured.
+    if mcp_base_url:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(mcp_base_url)
+        host = parsed.hostname
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        if parsed.scheme == "https":
+            upstream = f"OPENSSL:{host}:{port},verify=0"
+        else:
+            upstream = f"TCP:{host}:{port}"
+        service_text = f"""\
+[Unit]
+Description=MCP reverse proxy (socat)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/socat TCP-LISTEN:8443,fork,reuseaddr {upstream}
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+"""
+        (systemd_system / "mcp-proxy.service").write_text(service_text)
+        proxy_link = multi_user_wants / "mcp-proxy.service"
+        if not proxy_link.exists():
+            proxy_link.symlink_to("../mcp-proxy.service")
 
     # Pre-warm the uv package cache as the ubuntu user so the first VM startup
     # is instant.  Running any script with the same dependency set populates
@@ -544,6 +573,11 @@ def main() -> None:
         action="store_true",
         help="Skip the Firecracker smoke test after building",
     )
+    parser.add_argument(
+        "--mcp-base-url",
+        default=None,
+        help="MCP server base URL for socat reverse proxy (e.g. https://34.49.122.135)",
+    )
     args = parser.parse_args()
 
     workdir = args.workdir or Path(tempfile.mkdtemp(prefix="fc-build-"))
@@ -575,7 +609,7 @@ def main() -> None:
     try:
         install_system_packages(rootfs)
         install_claude_code(rootfs)
-        install_agent(rootfs)
+        install_agent(rootfs, mcp_base_url=args.mcp_base_url)
     finally:
         unmount_binds(mounts)
 

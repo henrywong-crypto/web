@@ -163,7 +163,7 @@ async fn write_gateway_settings(parts: &mut Parts, state: &AppState, guest_ip: I
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
         None,
-        state.config.mcp_base_url.as_deref(),
+        state.config.enable_mcp,
     ) {
         Ok(c) => c,
         Err(e) => {
@@ -181,19 +181,6 @@ async fn write_gateway_settings(parts: &mut Parts, state: &AppState, guest_ip: I
     .await
     {
         error!("failed to write gateway settings to VM: {e}");
-    }
-    if let Some(mcp_url) = &state.config.mcp_base_url {
-        if let Err(e) = chat_settings::setup_mcp_proxy(
-            guest_ip,
-            &state.config.ssh_key_path,
-            &state.config.ssh_user,
-            &state.config.vm_host_key_path,
-            mcp_url,
-        )
-        .await
-        {
-            error!("failed to setup MCP proxy on VM: {e}");
-        }
     }
 }
 
@@ -207,7 +194,7 @@ async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, g
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
         None,
-        state.config.mcp_base_url.as_deref(),
+        state.config.enable_mcp,
     ) {
         Ok(c) => c,
         Err(e) => {
@@ -225,19 +212,6 @@ async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, g
     .await
     {
         error!("failed to write gateway settings to VM: {e}");
-    }
-    if let Some(mcp_url) = &state.config.mcp_base_url {
-        if let Err(e) = chat_settings::setup_mcp_proxy(
-            guest_ip,
-            &state.config.ssh_key_path,
-            &state.config.ssh_user,
-            &state.config.vm_host_key_path,
-            mcp_url,
-        )
-        .await
-        {
-            error!("failed to setup MCP proxy on VM: {e}");
-        }
     }
 }
 

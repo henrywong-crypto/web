@@ -4,7 +4,6 @@ use russh::{ChannelMsg, client};
 use ssh_client::{SshClient, connect_ssh, open_exec_channel};
 use std::{net::Ipv4Addr, path::Path, str::from_utf8, time::Duration};
 use tokio::time::timeout;
-use url::Url;
 
 const GET_SETTINGS_CMD: &str = "cat ~/.claude/settings.json 2>/dev/null || echo '{}'";
 const SET_SETTINGS_CMD: &str = "mkdir -p ~/.claude && cat > ~/.claude/settings.json";
@@ -25,7 +24,7 @@ pub fn build_api_key_settings_json(
     sonnet_model: &str,
     opus_model: &str,
     model: Option<&str>,
-    mcp_base_url: Option<&str>,
+    enable_mcp: bool,
 ) -> Result<String> {
     let mut env = serde_json::json!({
         "ANTHROPIC_AUTH_TOKEN": api_key,
@@ -45,7 +44,7 @@ pub fn build_api_key_settings_json(
     if let Some(m) = model {
         settings["model"] = serde_json::Value::String(m.to_string());
     }
-    if mcp_base_url.is_some() {
+    if enable_mcp {
         settings["mcpServers"] = serde_json::json!({
             "gemini-websearch": {
                 "type": "http",
@@ -122,79 +121,6 @@ pub async fn set_vm_settings(
 ) -> Result<()> {
     let mut ssh_handle = connect_ssh(guest_ip, ssh_key_path, ssh_user, vm_host_key_path).await?;
     write_settings_file(&mut ssh_handle, content).await
-}
-
-/// Set up a socat-based MCP reverse proxy as a systemd user service on the VM.
-/// Parses `mcp_base_url` to determine host/port/scheme and creates a socat
-/// TCP-LISTEN → OPENSSL (or TCP) forwarder on localhost:8443.
-pub async fn setup_mcp_proxy(
-    guest_ip: Ipv4Addr,
-    ssh_key_path: &Path,
-    ssh_user: &str,
-    vm_host_key_path: &Path,
-    mcp_base_url: &str,
-) -> Result<()> {
-    let parsed = Url::parse(mcp_base_url).context("invalid mcp_base_url")?;
-    let host = parsed.host_str().context("mcp_base_url has no host")?;
-    let is_https = parsed.scheme() == "https";
-    let port = parsed.port().unwrap_or(if is_https { 443 } else { 80 });
-    let upstream = if is_https {
-        format!("OPENSSL:{host}:{port},verify=0")
-    } else {
-        format!("TCP:{host}:{port}")
-    };
-
-    let service = format!(
-        "[Unit]\n\
-         Description=MCP reverse proxy (socat)\n\
-         After=network.target\n\
-         \n\
-         [Service]\n\
-         Type=simple\n\
-         ExecStart=/usr/bin/socat TCP-LISTEN:{MCP_PROXY_LOCAL_PORT},fork,reuseaddr {upstream}\n\
-         Restart=always\n\
-         RestartSec=2\n\
-         \n\
-         [Install]\n\
-         WantedBy=default.target\n"
-    );
-
-    let cmd = format!(
-        "mkdir -p ~/.config/systemd/user && \
-         cat > ~/.config/systemd/user/mcp-proxy.service && \
-         systemctl --user daemon-reload && \
-         systemctl --user enable --now mcp-proxy.service"
-    );
-
-    let mut ssh_handle = connect_ssh(guest_ip, ssh_key_path, ssh_user, vm_host_key_path).await?;
-    let mut channel = open_exec_channel(&mut ssh_handle, &cmd).await?;
-    timeout(
-        Duration::from_secs(CHANNEL_SEND_TIMEOUT_SECS),
-        channel.data(Bytes::copy_from_slice(service.as_bytes()).as_ref()),
-    )
-    .await
-    .context("SSH channel send timed out")?
-    .context("SSH channel send failed")?;
-    timeout(
-        Duration::from_secs(CHANNEL_SEND_TIMEOUT_SECS),
-        channel.eof(),
-    )
-    .await
-    .context("SSH channel eof timed out")?
-    .context("SSH channel eof failed")?;
-    loop {
-        match timeout(
-            Duration::from_secs(CHANNEL_WAIT_TIMEOUT_SECS),
-            channel.wait(),
-        )
-        .await
-        {
-            Ok(Some(ChannelMsg::ExitStatus { .. })) | Ok(None) => break,
-            Ok(_) => {}
-            Err(_) => return Err(anyhow!("SSH channel read timed out")),
-        }
-    }
-    Ok(())
 }
 
 async fn write_settings_file(

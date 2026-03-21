@@ -2,7 +2,7 @@ use axum::{
     extract::{Query, State},
     response::{IntoResponse, Redirect, Response},
 };
-use chat_settings::{build_api_key_settings_json, set_vm_settings, setup_mcp_proxy};
+use chat_settings::{build_api_key_settings_json, set_vm_settings};
 use serde::Deserialize;
 use tower_sessions::Session;
 use tracing::{error, info};
@@ -85,7 +85,7 @@ pub(crate) async fn gateway_callback_handler(
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
         None,
-        state.config.mcp_base_url.as_deref(),
+        state.config.enable_mcp,
     )?;
 
     set_vm_settings(
@@ -96,16 +96,6 @@ pub(crate) async fn gateway_callback_handler(
         &content,
     )
     .await?;
-    if let Some(mcp_url) = &state.config.mcp_base_url {
-        setup_mcp_proxy(
-            user_vm.guest_ip,
-            &state.config.ssh_key_path,
-            &state.config.ssh_user,
-            &state.config.vm_host_key_path,
-            mcp_url,
-        )
-        .await?;
-    }
 
     Ok(Redirect::to("/").into_response())
 }

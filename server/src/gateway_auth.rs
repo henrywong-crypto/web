@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     response::{IntoResponse, Response},
 };
-use chat_settings::{build_api_key_settings_json, get_vm_settings, set_vm_settings, setup_mcp_proxy};
+use chat_settings::{build_api_key_settings_json, get_vm_settings, set_vm_settings};
 use serde::Deserialize;
 use token::TokenRequestBuilder;
 use tower_sessions::Session;
@@ -169,7 +169,7 @@ pub(crate) async fn renew_gateway_key_handler(
                     &state.config.anthropic_default_sonnet_model,
                     &state.config.anthropic_default_opus_model,
                     existing_model.as_deref(),
-                    state.config.mcp_base_url.as_deref(),
+                    state.config.enable_mcp,
                 )?;
                 set_vm_settings(
                     user_vm.guest_ip,
@@ -179,16 +179,6 @@ pub(crate) async fn renew_gateway_key_handler(
                     &content,
                 )
                 .await?;
-                if let Some(mcp_url) = &state.config.mcp_base_url {
-                    setup_mcp_proxy(
-                        user_vm.guest_ip,
-                        &state.config.ssh_key_path,
-                        &state.config.ssh_user,
-                        &state.config.vm_host_key_path,
-                        mcp_url,
-                    )
-                    .await?;
-                }
                 // Store the new key in session for VM reset handling
                 session
                     .insert("gateway_api_key", &api_key)

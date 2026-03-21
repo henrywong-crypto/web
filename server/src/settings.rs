@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use chat_settings::{build_api_key_settings_json, get_vm_settings, get_vm_settings_raw, set_vm_settings, setup_mcp_proxy};
+use chat_settings::{build_api_key_settings_json, get_vm_settings, get_vm_settings_raw, set_vm_settings};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -93,7 +93,7 @@ pub(crate) async fn put_settings_handler(
             &state.config.anthropic_default_sonnet_model,
             &state.config.anthropic_default_opus_model,
             body.model.as_deref(),
-            state.config.mcp_base_url.as_deref(),
+            state.config.enable_mcp,
         )?;
         set_vm_settings(
             user_vm.guest_ip,
@@ -103,16 +103,6 @@ pub(crate) async fn put_settings_handler(
             &content,
         )
         .await?;
-        if let Some(mcp_url) = &state.config.mcp_base_url {
-            setup_mcp_proxy(
-                user_vm.guest_ip,
-                &state.config.ssh_key_path,
-                &state.config.ssh_user,
-                &state.config.vm_host_key_path,
-                mcp_url,
-            )
-            .await?;
-        }
     } else if let Some(model) = &body.model {
         // Model-only update: read current settings, patch the model field, write back
         let raw = get_vm_settings_raw(
