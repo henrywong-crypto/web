@@ -106,7 +106,14 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       while (!cancelled) {
         try {
           const res = await fetch("/api/vm-status");
+          // If redirected to login page, navigate there
+          if (res.redirected) {
+            window.location.href = res.url;
+            return;
+          }
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const contentType = res.headers.get("content-type") ?? "";
+          if (!contentType.includes("application/json")) throw new Error("not JSON");
           const data = await res.json();
           if (data.status === "ready" && data.vm_id) {
             setVmId(data.vm_id);

@@ -113,6 +113,8 @@ impl FromRequestParts<AppState> for UserVm {
                 let user_vm = provision_new_vm(state, db_user.id)
                     .await
                     .map_err(IntoResponse::into_response)?;
+                // Write gateway settings to the freshly provisioned VM
+                write_gateway_settings(parts, state, user_vm.guest_ip).await;
                 return Ok(user_vm);
             }
         };
@@ -121,6 +123,45 @@ impl FromRequestParts<AppState> for UserVm {
             vm_id,
             guest_ip,
         })
+    }
+}
+
+/// Best-effort write of gateway API key settings to a VM. Extracts the session
+/// from the request parts and writes the settings file via SSH. Errors are
+/// logged but not propagated so callers are not blocked by transient SSH issues.
+async fn write_gateway_settings(parts: &mut Parts, state: &AppState, guest_ip: Ipv4Addr) {
+    let session = match Session::from_request_parts(parts, state).await {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let gateway_key = match session.get::<String>("gateway_api_key").await {
+        Ok(Some(key)) => key,
+        _ => return,
+    };
+    let content = match chat_settings::build_api_key_settings_json(
+        &gateway_key,
+        state.config.anthropic_base_url.as_deref(),
+        &state.config.anthropic_default_haiku_model,
+        &state.config.anthropic_default_sonnet_model,
+        &state.config.anthropic_default_opus_model,
+        None,
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("failed to build gateway settings: {e}");
+            return;
+        }
+    };
+    if let Err(e) = chat_settings::set_vm_settings(
+        guest_ip,
+        &state.config.ssh_key_path,
+        &state.config.ssh_user,
+        &state.config.vm_host_key_path,
+        &content,
+    )
+    .await
+    {
+        error!("failed to write gateway settings to VM: {e}");
     }
 }
 
@@ -147,9 +188,9 @@ pub(crate) async fn get_or_create_terminal(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    let db_user = get_user_by_email(&state.db, &user.email)
-        .await?
-        .ok_or_else(|| anyhow!("user not found"))?;
+    let Some(db_user) = get_user_by_email(&state.db, &user.email).await? else {
+        return Ok(Redirect::to("/login").into_response());
+    };
     let has_user_rootfs = find_user_rootfs(&state.config.user_rootfs_dir, db_user.id).is_some();
     let csrf_token = get_csrf_token(&session).await?;
     // Serve the page immediately with vm_id="" — the frontend will poll /api/vm-status
@@ -176,9 +217,9 @@ pub(crate) async fn vm_status_handler(
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    let db_user = get_user_by_email(&state.db, &user.email)
-        .await?
-        .ok_or_else(|| anyhow!("user not found"))?;
+    let Some(db_user) = get_user_by_email(&state.db, &user.email).await? else {
+        return Ok(Redirect::to("/login").into_response());
+    };
     let user_id = db_user.id;
 
     // Check if VM already exists
