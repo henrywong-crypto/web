@@ -381,6 +381,11 @@ async def run_query(
         log(f"query cancelled  task_id={task_id!r}")
     except Exception as exc:
         log(f"query error: {exc}")
+        log(f"query error type: {type(exc).__name__}")
+        log(f"query error attrs: {vars(exc) if hasattr(exc, '__dict__') else 'no __dict__'}")
+        for attr in ("stderr", "output", "returncode", "cmd", "exit_code"):
+            if hasattr(exc, attr):
+                log(f"query error {attr}: {getattr(exc, attr)!r}")
         emit_sse("error_event", {"message": str(exc)})
     finally:
         log(f"query done  task_id={task_id!r}  session_id={captured_session_id!r}")
