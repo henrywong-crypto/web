@@ -1,30 +1,26 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use firecracker_manager::{build_mmds_with_iam, put_mmds};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use tracing::{error, warn};
 
 use crate::VmRegistry;
 use crate::iam::{HostIamCredential, fetch_host_iam_credentials};
 
-pub async fn refresh_all_vm_mmds(vms: &VmRegistry, use_iam_creds: bool, iam_role_name: &str) {
+pub async fn refresh_all_vm_mmds(
+    vms: &VmRegistry,
+    use_iam_creds: bool,
+    iam_role_name: &str,
+) -> Result<()> {
     if !use_iam_creds {
-        return;
+        return Ok(());
     }
-    let Some(host_iam_credential) = fetch_host_iam_credentials(iam_role_name)
-        .await
-        .map_err(|e| error!("failed to fetch host IAM credentials: {e}"))
-        .ok()
-    else {
-        return;
-    };
+    let host_iam_credential = fetch_host_iam_credentials(iam_role_name).await?;
     let vm_socket_paths: HashMap<String, PathBuf> = {
-        let Ok(registry) = vms.lock() else {
-            error!("vm registry mutex poisoned");
-            return;
-        };
+        let registry = vms
+            .lock()
+            .map_err(|_| anyhow!("vm registry mutex poisoned"))?;
         registry
             .iter()
             .filter(|(_, e)| e.has_iam_creds)
@@ -32,10 +28,9 @@ pub async fn refresh_all_vm_mmds(vms: &VmRegistry, use_iam_creds: bool, iam_role
             .collect()
     };
     for (vm_id, socket_path) in vm_socket_paths {
-        if let Err(e) = refresh_vm_mmds(&vm_id, &socket_path, &host_iam_credential).await {
-            warn!("failed to refresh mmds: {e}");
-        }
+        refresh_vm_mmds(&vm_id, &socket_path, &host_iam_credential).await?;
     }
+    Ok(())
 }
 
 async fn refresh_vm_mmds(

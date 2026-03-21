@@ -63,10 +63,7 @@ pub async fn save_all_vm_rootfs(
         "saving rootfs for {} running vm(s) before shutdown",
         vm_entries.len()
     );
-    save_vm_rootfs_to_dir(&vm_entries, user_rootfs_dir, rootfs_lock)
-        .await
-        .context("failed to save rootfs on shutdown")?;
-    Ok(())
+    save_vm_rootfs_to_dir(&vm_entries, user_rootfs_dir, rootfs_lock).await
 }
 
 async fn save_vm_rootfs_to_dir(
