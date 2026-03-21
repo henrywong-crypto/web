@@ -255,6 +255,10 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
           }),
           signal: abortController.signal,
         });
+        if (res.status === 503) {
+          // VM is still starting — silently ignore so the user can retry.
+          return;
+        }
         if (!res.ok) {
           const msg = await res.text();
           throw new Error(msg || `HTTP ${res.status}`);

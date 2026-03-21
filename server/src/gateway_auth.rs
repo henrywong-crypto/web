@@ -5,7 +5,7 @@ use axum::{
     extract::State,
     response::{IntoResponse, Response},
 };
-use chat_settings::{build_api_key_settings_json, set_vm_settings};
+use chat_settings::{build_api_key_settings_json, get_vm_settings, set_vm_settings};
 use serde::Deserialize;
 use token::TokenRequestBuilder;
 use tower_sessions::Session;
@@ -30,12 +30,20 @@ pub(crate) async fn initiate_gateway_login(
         .redirect_uri(&config.gateway_cognito_redirect_uri)
         .identity_provider(&config.gateway_identity_provider);
 
-    let (url, csrf_token, _nonce, _pkce_verifier) = builder.build()?;
+    let (url, csrf_token, nonce, pkce_verifier) = builder.build()?;
 
     session
         .insert("gateway_oauth_state", csrf_token.secret())
         .await
         .context("failed to store gateway oauth state in session")?;
+    session
+        .insert("gateway_oauth_nonce", &nonce)
+        .await
+        .context("failed to store gateway oauth nonce in session")?;
+    session
+        .insert("gateway_oauth_pkce_verifier", pkce_verifier.secret())
+        .await
+        .context("failed to store gateway oauth pkce verifier in session")?;
 
     Ok(url.to_string())
 }
@@ -43,6 +51,7 @@ pub(crate) async fn initiate_gateway_login(
 /// Exchanges an authorization code for an access token at Pool B's token endpoint.
 pub(crate) async fn exchange_gateway_code(
     code: &str,
+    pkce_verifier: &str,
     config: &AppConfig,
 ) -> Result<String> {
     let resp = TokenRequestBuilder::new()
@@ -52,6 +61,7 @@ pub(crate) async fn exchange_gateway_code(
         .region(&config.gateway_cognito_region)
         .redirect_uri(&config.gateway_cognito_redirect_uri)
         .code(code)
+        .code_verifier(pkce_verifier)
         .build()
         .context("failed to build gateway token request")?
         .send()
@@ -85,7 +95,6 @@ pub(crate) async fn provision_gateway_api_key(
     let url = format!("{}/api/v1/api-key", gateway_api_url);
 
     let client = reqwest::Client::builder()
-        .danger_accept_invalid_certs(true)
         .build()
         .context("failed to build HTTP client")?;
     let resp = client
@@ -143,13 +152,23 @@ pub(crate) async fn renew_gateway_key_handler(
     {
         match provision_gateway_api_key(&access_token, &state.config.gateway_api_url).await {
             Ok(api_key) => {
+                // Preserve the user's existing model setting
+                let existing_model = get_vm_settings(
+                    user_vm.guest_ip,
+                    &state.config.ssh_key_path,
+                    &state.config.ssh_user,
+                    &state.config.vm_host_key_path,
+                )
+                .await
+                .ok()
+                .and_then(|s| s.model);
                 let content = build_api_key_settings_json(
                     &api_key,
                     state.config.anthropic_base_url.as_deref(),
                     &state.config.anthropic_default_haiku_model,
                     &state.config.anthropic_default_sonnet_model,
                     &state.config.anthropic_default_opus_model,
-                    None,
+                    existing_model.as_deref(),
                 )?;
                 set_vm_settings(
                     user_vm.guest_ip,

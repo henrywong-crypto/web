@@ -28,7 +28,9 @@ pub async fn refresh_all_vm_mmds(
             .collect()
     };
     for (vm_id, socket_path) in vm_socket_paths {
-        refresh_vm_mmds(&vm_id, &socket_path, &host_iam_credential).await?;
+        if let Err(e) = refresh_vm_mmds(&vm_id, &socket_path, &host_iam_credential).await {
+            tracing::warn!("mmds refresh failed for vm {vm_id}: {e}");
+        }
     }
     Ok(())
 }

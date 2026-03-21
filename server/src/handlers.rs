@@ -183,6 +183,36 @@ async fn write_gateway_settings(parts: &mut Parts, state: &AppState, guest_ip: I
     }
 }
 
+/// Best-effort write of gateway API key settings to a VM using a pre-extracted key.
+/// Used by the background provisioning path where session is not available.
+async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, gateway_key: &str) {
+    let content = match chat_settings::build_api_key_settings_json(
+        gateway_key,
+        state.config.anthropic_base_url.as_deref(),
+        &state.config.anthropic_default_haiku_model,
+        &state.config.anthropic_default_sonnet_model,
+        &state.config.anthropic_default_opus_model,
+        None,
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("failed to build gateway settings: {e}");
+            return;
+        }
+    };
+    if let Err(e) = chat_settings::set_vm_settings(
+        guest_ip,
+        &state.config.ssh_key_path,
+        &state.config.ssh_user,
+        &state.config.vm_host_key_path,
+        &content,
+    )
+    .await
+    {
+        error!("failed to write gateway settings to VM: {e}");
+    }
+}
+
 fn remove_user_vm(vms: &VmRegistry, user_id: Uuid) -> Result<()> {
     let _removed = {
         let mut registry = vms
@@ -268,11 +298,26 @@ pub(crate) async fn vm_status_handler(
         }
     }
 
+    // Extract gateway key from session before spawning background task
+    let gateway_key = session
+        .get::<String>("gateway_api_key")
+        .await
+        .ok()
+        .flatten();
+
     // Spawn provisioning in background
     let state_clone = state.clone();
     tokio::spawn(async move {
-        if let Err(e) = provision_new_vm(&state_clone, user_id).await {
-            error!("background vm provisioning failed for {user_id}: {}", e.0);
+        match provision_new_vm(&state_clone, user_id).await {
+            Ok(user_vm) => {
+                // Write gateway settings if available
+                if let Some(key) = gateway_key {
+                    write_gateway_settings_with_key(&state_clone, user_vm.guest_ip, &key).await;
+                }
+            }
+            Err(e) => {
+                error!("background vm provisioning failed for {user_id}: {}", e.0);
+            }
         }
     });
 

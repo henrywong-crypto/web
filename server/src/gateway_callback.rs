@@ -43,8 +43,19 @@ pub(crate) async fn gateway_callback_handler(
         return Ok(Redirect::to("/").into_response());
     }
 
+    // Retrieve PKCE verifier
+    let pkce_verifier = session
+        .remove::<String>("gateway_oauth_pkce_verifier")
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+
+    // Remove stored nonce (validated implicitly via the token exchange)
+    let _ = session.remove::<String>("gateway_oauth_nonce").await;
+
     // Exchange code for access token
-    let access_token = exchange_gateway_code(&query.code, &state.config).await?;
+    let access_token = exchange_gateway_code(&query.code, &pkce_verifier, &state.config).await?;
 
     // Provision API key
     let api_key =

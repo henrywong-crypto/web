@@ -246,8 +246,10 @@ export interface SetupOpts {
   settingsSaveError?: boolean;
   /** When true, data-has-user-rootfs is set to "true" so the reset button is rendered. */
   hasUserRootfs?: boolean;
-  /** When set, POST /chat returns 503 with this text instead of the normal 200 response. */
+  /** When set, POST /chat returns this text as an error instead of the normal 200 response. Defaults to status 500. */
   chatError?: string;
+  /** HTTP status code for chatError. Defaults to 500. */
+  chatErrorStatus?: number;
   /** When set, POST /chat-question-answer returns 500 with this text instead of the normal 200 response. */
   answerError?: string;
   /** When true, POST /api/renew-gateway-key returns a 500 error. */
@@ -461,7 +463,7 @@ export async function setupApp(
     if (route.request().method() !== "POST") return route.continue();
 
     if (opts.chatError) {
-      await route.fulfill({ status: 503, body: opts.chatError });
+      await route.fulfill({ status: opts.chatErrorStatus ?? 500, body: opts.chatError });
       return;
     }
 

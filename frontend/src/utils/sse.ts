@@ -10,6 +10,7 @@ import type {
   SseToolResult,
   SseToolStart,
 } from "../types";
+import { safeJsonParse } from "./safeJson";
 
 export function parseSseBlock(
   part: string,
@@ -34,7 +35,7 @@ export function dispatchSseEvent(
 ): void {
   let payload: unknown;
   try {
-    payload = JSON.parse(data);
+    payload = safeJsonParse(data);
   } catch (e) {
     console.warn("Failed to parse SSE data as JSON", e);
     return;
@@ -120,7 +121,7 @@ export function attachEventSourceListeners(
   };
   const safeParse = (raw: string): unknown => {
     try {
-      return JSON.parse(raw);
+      return safeJsonParse(raw);
     } catch {
       return undefined;
     }
