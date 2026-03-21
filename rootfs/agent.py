@@ -14,6 +14,7 @@ from typing import Any
 
 SOCKET_PATH = "/tmp/agent.sock"
 QUESTION_TIMEOUT_SECS = 3600
+MCP_PROXY_PORT = 8443
 
 # Allowed root directories for work_dir. Populated at startup via _init_allowed_roots().
 _ALLOWED_WORK_DIR_ROOTS: list[str] = []
@@ -60,6 +61,22 @@ def resolve_work_dir(raw: str | None) -> str:
 
 
 _init_allowed_roots()
+
+
+def _load_mcp_servers() -> dict:
+    """Load mcpServers from ~/.claude/settings.json if present."""
+    settings_path = os.path.join(
+        os.environ.get("HOME") or _default_home(), ".claude", "settings.json"
+    )
+    try:
+        with open(settings_path) as f:
+            settings = json.load(f)
+        servers = settings.get("mcpServers", {})
+        if servers:
+            log(f"loaded mcpServers: {list(servers.keys())}")
+        return servers
+    except (FileNotFoundError, json.JSONDecodeError, KeyError):
+        return {}
 
 
 @dataclasses.dataclass
@@ -343,10 +360,13 @@ async def run_query(
             }
         }
 
+    mcp_servers = _load_mcp_servers()
+
     options = ClaudeAgentOptions(
         cwd=work_dir,
         setting_sources=["user"],
         can_use_tool=handle_tool_permission,
+        mcp_servers=mcp_servers,
         hooks={
             "PreToolUse": [
                 HookMatcher(
