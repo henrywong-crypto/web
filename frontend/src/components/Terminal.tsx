@@ -13,17 +13,45 @@ const TERMINAL_OPTIONS: ITerminalOptions = {
 };
 
 export default function Terminal({ visible }: { visible: boolean }) {
-  const { vmId } = useSse();
+  const { vmId, setVmConnected } = useSse();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const initializedRef = useRef(false);
+  const xtermAttachedRef = useRef(false);
 
-  const initShell = useCallback(() => {
-    if (initializedRef.current) return;
+  // Eagerly open WS on mount for health monitoring
+  useEffect(() => {
+    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(
+      `${wsProto}//${window.location.host}/ws/${encodeURIComponent(vmId)}`,
+    );
+    ws.binaryType = "arraybuffer";
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setVmConnected(true);
+    };
+
+    ws.onclose = () => {
+      setVmConnected(false);
+      const term = termRef.current;
+      if (term) {
+        term.write("\r\n\x1b[2mconnection closed\x1b[0m\r\n");
+      }
+    };
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [vmId, setVmConnected]);
+
+  const attachXterm = useCallback(() => {
+    if (xtermAttachedRef.current) return;
     if (!containerRef.current) return;
-    initializedRef.current = true;
+    xtermAttachedRef.current = true;
 
     const term = new XTerm(TERMINAL_OPTIONS);
     const fitAddon = new FitAddon();
@@ -35,12 +63,8 @@ export default function Terminal({ visible }: { visible: boolean }) {
     termRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(
-      `${wsProto}//${window.location.host}/ws/${encodeURIComponent(vmId)}`,
-    );
-    ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
+    const ws = wsRef.current;
+    if (!ws) return;
 
     const sendResize = () => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -52,24 +76,31 @@ export default function Terminal({ visible }: { visible: boolean }) {
 
     term.onResize(sendResize);
 
-    ws.onopen = () => {
+    // Attach data/message handlers to the existing WS
+    if (ws.readyState === WebSocket.OPEN) {
       term.onData((d) => ws.send(new TextEncoder().encode(d)));
       sendResize();
-    };
+    } else {
+      const origOnOpen = ws.onopen;
+      ws.onopen = (e) => {
+        if (origOnOpen) (origOnOpen as (e: Event) => void).call(ws, e);
+        term.onData((d) => ws.send(new TextEncoder().encode(d)));
+        sendResize();
+      };
+    }
 
     ws.onmessage = (e) => term.write(new Uint8Array(e.data as ArrayBuffer));
-    ws.onclose = () => term.write("\r\n\x1b[2mconnection closed\x1b[0m\r\n");
 
     const ro = new ResizeObserver(() => fitAddon.fit());
     ro.observe(containerRef.current);
-  }, [vmId]);
+  }, []);
 
-  // Initialize lazily on first visible
+  // Initialize xterm lazily on first visible
   useEffect(() => {
     if (visible) {
-      initShell();
+      attachXterm();
     }
-  }, [visible, initShell]);
+  }, [visible, attachXterm]);
 
   // Fit on resize / visibility change
   useEffect(() => {
@@ -80,7 +111,7 @@ export default function Terminal({ visible }: { visible: boolean }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-black">
-      {!initializedRef.current && !visible && (
+      {!xtermAttachedRef.current && !visible && (
         <div className="flex flex-1 items-center justify-center text-gray-500">
           <TerminalIcon className="mr-2 h-5 w-5" />
           <span className="text-sm">Terminal</span>
