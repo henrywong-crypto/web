@@ -210,6 +210,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "authorize"
 version = "0.1.0"
+source = "git+https://github.com/llm-proxy-rs/cognito.git?rev=4dfe4e3#4dfe4e3c4f51fdc6e287e67042216a265953ac70"
 dependencies = [
  "anyhow",
  "base64",
@@ -1896,6 +1897,7 @@ dependencies = [
 [[package]]
 name = "handlers"
 version = "0.1.0"
+source = "git+https://github.com/llm-proxy-rs/cognito.git?rev=4dfe4e3#4dfe4e3c4f51fdc6e287e67042216a265953ac70"
 dependencies = [
  "anyhow",
  "authorize",
@@ -2489,6 +2491,7 @@ dependencies = [
 [[package]]
 name = "jwks"
 version = "0.1.0"
+source = "git+https://github.com/llm-proxy-rs/cognito.git?rev=4dfe4e3#4dfe4e3c4f51fdc6e287e67042216a265953ac70"
 dependencies = [
  "anyhow",
  "jsonwebtoken",
@@ -2500,6 +2503,7 @@ dependencies = [
 [[package]]
 name = "jwt"
 version = "0.1.0"
+source = "git+https://github.com/llm-proxy-rs/cognito.git?rev=4dfe4e3#4dfe4e3c4f51fdc6e287e67042216a265953ac70"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4897,6 +4901,7 @@ dependencies = [
 [[package]]
 name = "token"
 version = "0.1.0"
+source = "git+https://github.com/llm-proxy-rs/cognito.git?rev=4dfe4e3#4dfe4e3c4f51fdc6e287e67042216a265953ac70"
 dependencies = [
  "anyhow",
  "base64",
@@ -5392,6 +5397,7 @@ dependencies = [
 [[package]]
 name = "validation"
 version = "0.1.0"
+source = "git+https://github.com/llm-proxy-rs/cognito.git?rev=4dfe4e3#4dfe4e3c4f51fdc6e287e67042216a265953ac70"
 dependencies = [
  "anyhow",
  "jsonwebtoken",
