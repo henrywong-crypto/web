@@ -241,30 +241,7 @@ pub(crate) async fn vm_status_handler(
     let user_id = db_user.id;
 
     // Check if VM already exists
-    if let Some((vm_id, guest_ip)) = find_user_vm(&state.vms, user_id)? {
-        // Best-effort write of gateway settings
-        if let Ok(Some(gateway_key)) = session.get::<String>("gateway_api_key").await {
-            if let Ok(content) = chat_settings::build_api_key_settings_json(
-                &gateway_key,
-                state.config.anthropic_base_url.as_deref(),
-                &state.config.anthropic_default_haiku_model,
-                &state.config.anthropic_default_sonnet_model,
-                &state.config.anthropic_default_opus_model,
-                None,
-            ) {
-                if let Err(e) = chat_settings::set_vm_settings(
-                    guest_ip,
-                    &state.config.ssh_key_path,
-                    &state.config.ssh_user,
-                    &state.config.vm_host_key_path,
-                    &content,
-                )
-                .await
-                {
-                    error!("vm_status: failed to write gateway settings: {e}");
-                }
-            }
-        }
+    if let Some((vm_id, _guest_ip)) = find_user_vm(&state.vms, user_id)? {
         let has_user_rootfs =
             find_user_rootfs(&state.config.user_rootfs_dir, user_id).is_some();
         return Ok(Json(VmStatusResponse {

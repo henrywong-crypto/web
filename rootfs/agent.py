@@ -14,6 +14,7 @@ from typing import Any
 
 SOCKET_PATH = "/tmp/agent.sock"
 QUESTION_TIMEOUT_SECS = 3600
+SETTINGS_PATH = os.path.expanduser("~/.claude/settings.json")
 
 # Allowed root directories for work_dir. Populated at startup via _init_allowed_roots().
 _ALLOWED_WORK_DIR_ROOTS: list[str] = []
@@ -23,6 +24,30 @@ def log(msg: str) -> None:
     """Write a log line to stderr so it appears in server logs without polluting the stdout protocol."""
     sys.stderr.write(f"[agent] {msg}\n")
     sys.stderr.flush()
+
+
+def _load_settings_env() -> None:
+    """Read ~/.claude/settings.json and inject the 'env' section into os.environ.
+
+    The Claude CLI reads this file itself, but the claude-agent-sdk may spawn
+    the CLI as a subprocess that inherits the agent's environment. Setting the
+    variables here ensures they are available regardless of how the SDK resolves
+    credentials.
+    """
+    try:
+        with open(SETTINGS_PATH) as f:
+            settings = json.load(f)
+        env = settings.get("env")
+        if isinstance(env, dict):
+            for key, value in env.items():
+                if isinstance(value, str) and key not in os.environ:
+                    os.environ[key] = value
+                    log(f"settings env: {key}={'*' * min(len(value), 4)}")
+    except (FileNotFoundError, json.JSONDecodeError, OSError) as exc:
+        log(f"settings env load skipped: {exc}")
+
+
+_load_settings_env()
 
 
 def _default_home() -> str:
