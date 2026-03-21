@@ -1,7 +1,8 @@
 {
   "private": true,
   "scripts": {
-    "build": "esbuild src/index.tsx --bundle --minify --outfile=dist/app.js --loader:.tsx=tsx --loader:.ts=ts && ./node_modules/.bin/tailwindcss -i src/index.css -o dist/styles.css --minify",
+    "copy-fonts": "mkdir -p dist/fonts && cp node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2 node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2 node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2 node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-italic.woff2 node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-500-normal.woff2 node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2 dist/fonts/",
+    "build": "npm run copy-fonts && esbuild src/index.tsx --bundle --minify --outfile=dist/app.js --loader:.tsx=tsx --loader:.ts=ts && ./node_modules/.bin/tailwindcss -i src/index.css -o dist/styles.css --minify",
     "watch": "esbuild src/index.tsx --bundle --outfile=dist/app.js --loader:.tsx=tsx --loader:.ts=ts --watch & ./node_modules/.bin/tailwindcss -i src/index.css -o dist/styles.css --watch",
     "build:js": "esbuild src/index.tsx --bundle --minify --outfile=dist/app.js --loader:.tsx=tsx --loader:.ts=ts",
     "build:css": "./node_modules/.bin/tailwindcss -i src/index.css -o dist/styles.css --minify",
@@ -24,6 +25,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.1.0",
+    "@fontsource/ibm-plex-sans": "^5.1.0",
     "@tailwindcss/typography": "^0.5.19",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.577.0",

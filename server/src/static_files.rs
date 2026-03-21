@@ -1,11 +1,11 @@
 use anyhow::Context;
 use axum::{
     body::Body,
-    extract::State,
-    http::header,
+    extract::{Path, State},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use std::path::{Path, PathBuf};
+use std::path::{self, PathBuf};
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
@@ -14,12 +14,14 @@ use crate::state::{AppError, AppState};
 pub(crate) struct StaticAssets {
     pub(crate) app_js_path: PathBuf,
     pub(crate) styles_css_path: PathBuf,
+    pub(crate) fonts_dir: PathBuf,
 }
 
-pub(crate) fn load_static_assets(static_dir: &Path) -> StaticAssets {
+pub(crate) fn load_static_assets(static_dir: &path::Path) -> StaticAssets {
     StaticAssets {
         app_js_path: static_dir.join("app.js"),
         styles_css_path: static_dir.join("styles.css"),
+        fonts_dir: static_dir.join("fonts"),
     }
 }
 
@@ -49,6 +51,34 @@ pub(crate) async fn serve_styles_css(State(state): State<AppState>) -> Result<Re
     Ok((
         [
             (header::CONTENT_TYPE, "text/css; charset=utf-8"),
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+        ],
+        body,
+    )
+        .into_response())
+}
+
+pub(crate) async fn serve_font(
+    Path(filename): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Response, AppError> {
+    // Only allow .woff2 files with safe filenames (no path traversal)
+    if !filename.ends_with(".woff2")
+        || filename.contains('/')
+        || filename.contains('\\')
+        || filename.contains("..")
+    {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+    let font_path = state.static_assets.fonts_dir.join(&filename);
+    let file = match File::open(&font_path).await {
+        Ok(f) => f,
+        Err(_) => return Ok(StatusCode::NOT_FOUND.into_response()),
+    };
+    let body = Body::from_stream(ReaderStream::new(file));
+    Ok((
+        [
+            (header::CONTENT_TYPE, "font/woff2"),
             (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
         ],
         body,

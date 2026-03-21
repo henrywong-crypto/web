@@ -50,7 +50,7 @@ use crate::{
     },
     settings::{get_settings_handler, put_settings_handler},
     state::{AppState, load_config},
-    static_files::{load_static_assets, serve_app_js, serve_styles_css},
+    static_files::{load_static_assets, serve_app_js, serve_font, serve_styles_css},
     terminal::handle_ws_upgrade,
     upload::upload_file_handler,
 };
@@ -143,6 +143,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
         )
         .route("/static/app.js", get(serve_app_js))
         .route("/static/styles.css", get(serve_styles_css))
+        .route("/static/fonts/{filename}", get(serve_font))
         .with_state(app_state)
         .layer(middleware::from_fn(csrf_middleware))
         .layer(session_layer)
@@ -173,10 +174,10 @@ async fn add_security_headers(request: Request, next: Next) -> Response {
         HeaderValue::from_static(
             "default-src 'self'; \
              script-src 'self'; \
-             style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; \
+             style-src 'self' 'unsafe-inline'; \
              connect-src 'self'; \
              img-src 'self' data: blob:; \
-             font-src 'self' data: https://fonts.gstatic.com",
+             font-src 'self'",
         ),
     );
     response
