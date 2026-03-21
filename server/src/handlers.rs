@@ -110,6 +110,24 @@ impl FromRequestParts<AppState> for UserVm {
         })? {
             Some(entry) => entry,
             None => {
+                // If already being provisioned by vm_status_handler, return 503
+                // so the frontend can retry after the VM is ready.
+                {
+                    let provisioning = state.provisioning_users.lock().map_err(|_| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "An internal error occurred",
+                        )
+                            .into_response()
+                    })?;
+                    if provisioning.contains(&db_user.id) {
+                        return Err((
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            "VM is still starting, please try again",
+                        )
+                            .into_response());
+                    }
+                }
                 let user_vm = provision_new_vm(state, db_user.id)
                     .await
                     .map_err(IntoResponse::into_response)?;
@@ -224,24 +242,28 @@ pub(crate) async fn vm_status_handler(
 
     // Check if VM already exists
     if let Some((vm_id, guest_ip)) = find_user_vm(&state.vms, user_id)? {
-        // Write gateway settings if session has a key
+        // Best-effort write of gateway settings
         if let Ok(Some(gateway_key)) = session.get::<String>("gateway_api_key").await {
-            let content = chat_settings::build_api_key_settings_json(
+            if let Ok(content) = chat_settings::build_api_key_settings_json(
                 &gateway_key,
                 state.config.anthropic_base_url.as_deref(),
                 &state.config.anthropic_default_haiku_model,
                 &state.config.anthropic_default_sonnet_model,
                 &state.config.anthropic_default_opus_model,
                 None,
-            )?;
-            chat_settings::set_vm_settings(
-                guest_ip,
-                &state.config.ssh_key_path,
-                &state.config.ssh_user,
-                &state.config.vm_host_key_path,
-                &content,
-            )
-            .await?;
+            ) {
+                if let Err(e) = chat_settings::set_vm_settings(
+                    guest_ip,
+                    &state.config.ssh_key_path,
+                    &state.config.ssh_user,
+                    &state.config.vm_host_key_path,
+                    &content,
+                )
+                .await
+                {
+                    error!("vm_status: failed to write gateway settings: {e}");
+                }
+            }
         }
         let has_user_rootfs =
             find_user_rootfs(&state.config.user_rootfs_dir, user_id).is_some();
