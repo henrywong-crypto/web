@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use authorize::AuthorizeUrlBuilder;
 use axum::{
     Json,
     extract::State,
@@ -6,6 +7,7 @@ use axum::{
 };
 use chat_settings::{build_api_key_settings_json, set_vm_settings};
 use serde::Deserialize;
+use token::TokenRequestBuilder;
 use tower_sessions::Session;
 use tracing::warn;
 
@@ -21,29 +23,21 @@ pub(crate) async fn initiate_gateway_login(
     session: &Session,
     config: &AppConfig,
 ) -> Result<String> {
-    let state_nonce = uuid::Uuid::new_v4().to_string();
+    let builder = AuthorizeUrlBuilder::new()
+        .client_id(&config.gateway_cognito_client_id)
+        .domain(&config.gateway_cognito_domain)
+        .region(&config.gateway_cognito_region)
+        .redirect_uri(&config.gateway_cognito_redirect_uri)
+        .identity_provider(&config.gateway_identity_provider);
+
+    let (url, csrf_token, _nonce, _pkce_verifier) = builder.build()?;
+
     session
-        .insert("gateway_oauth_state", &state_nonce)
+        .insert("gateway_oauth_state", csrf_token.secret())
         .await
         .context("failed to store gateway oauth state in session")?;
 
-    let authorize_url = format!(
-        "https://{}.auth.{}.amazoncognito.com/oauth2/authorize?\
-         response_type=code\
-         &client_id={}\
-         &redirect_uri={}\
-         &scope=openid+email\
-         &state={}\
-         &identity_provider={}",
-        config.gateway_cognito_domain,
-        config.gateway_cognito_region,
-        config.gateway_cognito_client_id,
-        urlencoding::encode(&config.gateway_cognito_redirect_uri),
-        state_nonce,
-        urlencoding::encode(&config.gateway_identity_provider),
-    );
-
-    Ok(authorize_url)
+    Ok(url.to_string())
 }
 
 /// Exchanges an authorization code for an access token at Pool B's token endpoint.
@@ -51,23 +45,15 @@ pub(crate) async fn exchange_gateway_code(
     code: &str,
     config: &AppConfig,
 ) -> Result<String> {
-    let token_url = format!(
-        "https://{}.auth.{}.amazoncognito.com/oauth2/token",
-        config.gateway_cognito_domain, config.gateway_cognito_region
-    );
-
-    let client = reqwest::Client::new();
-    let resp = client
-        .post(&token_url)
-        .basic_auth(
-            &config.gateway_cognito_client_id,
-            Some(&config.gateway_cognito_client_secret),
-        )
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("code", code),
-            ("redirect_uri", &config.gateway_cognito_redirect_uri),
-        ])
+    let resp = TokenRequestBuilder::new()
+        .client_id(&config.gateway_cognito_client_id)
+        .client_secret(&config.gateway_cognito_client_secret)
+        .domain(&config.gateway_cognito_domain)
+        .region(&config.gateway_cognito_region)
+        .redirect_uri(&config.gateway_cognito_redirect_uri)
+        .code(code)
+        .build()
+        .context("failed to build gateway token request")?
         .send()
         .await
         .context("failed to call gateway cognito token endpoint")?
@@ -95,13 +81,8 @@ pub(crate) async fn exchange_gateway_code(
 pub(crate) async fn provision_gateway_api_key(
     access_token: &str,
     gateway_api_url: &str,
-    force_new: bool,
 ) -> Result<String> {
-    let url = if force_new {
-        format!("{}/api/v1/api-keys?force_new=true", gateway_api_url)
-    } else {
-        format!("{}/api/v1/api-keys", gateway_api_url)
-    };
+    let url = format!("{}/api/v1/api-key", gateway_api_url);
 
     let client = reqwest::Client::builder()
         .danger_accept_invalid_certs(true)
@@ -157,9 +138,10 @@ pub(crate) async fn renew_gateway_key_handler(
     if let Some(access_token) = session
         .get::<String>("gateway_access_token")
         .await
-        .unwrap_or(None)
+        .ok()
+        .flatten()
     {
-        match provision_gateway_api_key(&access_token, &state.config.gateway_api_url, true).await {
+        match provision_gateway_api_key(&access_token, &state.config.gateway_api_url).await {
             Ok(api_key) => {
                 let content = build_api_key_settings_json(
                     &api_key,
@@ -168,7 +150,7 @@ pub(crate) async fn renew_gateway_key_handler(
                     &state.config.anthropic_default_sonnet_model,
                     &state.config.anthropic_default_opus_model,
                     None,
-                );
+                )?;
                 set_vm_settings(
                     user_vm.guest_ip,
                     &state.config.ssh_key_path,
@@ -189,8 +171,6 @@ pub(crate) async fn renew_gateway_key_handler(
 
     // Token expired or missing — redirect through OAuth flow
     let authorize_url = initiate_gateway_login(&session, &state.config).await?;
-    // Mark that this is a renew flow so callback knows
-    let _ = session.insert("gateway_renew_flow", true).await;
     Ok(Json(serde_json::json!({"redirect": authorize_url})).into_response())
 }
 

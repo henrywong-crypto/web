@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
         &app_state.config.jailer_chroot_base,
     )
     .await;
-    setup_host_networking(&app_state.config.net_helper_path).await;
+    setup_host_networking(&app_state.config.net_helper_path).await?;
     let mmds_refresh_abort_handle = if app_state.config.use_iam_creds {
         Some(spawn_mmds_refresh_task(app_state.clone()).abort_handle())
     } else {
@@ -216,7 +216,7 @@ async fn serve_router(
         &app_state.config.user_rootfs_dir,
         &app_state.rootfs_lock,
     )
-    .await;
+    .await?;
     Ok(())
 }
 

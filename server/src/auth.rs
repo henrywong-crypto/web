@@ -10,7 +10,7 @@ use tracing::{error, warn};
 
 use crate::{
     gateway_auth::{initiate_gateway_login, is_gateway_configured},
-    state::AppState,
+    state::{AppError, AppState},
     templates::render_login_page,
 };
 
@@ -57,70 +57,40 @@ pub(crate) async fn get_login_handler() -> Html<String> {
 pub(crate) async fn get_cognito_login_handler(
     session: Session,
     State(state): State<AppState>,
-) -> Response {
+) -> Result<Response, AppError> {
     let cognito_state = build_cognito_state(&state);
-    login(session, State(cognito_state))
-        .await
-        .unwrap_or_else(|e| {
-            error!("cognito login failed: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "An internal error occurred",
-            )
-                .into_response()
-        })
+    Ok(login(session, State(cognito_state)).await?)
 }
 
 pub(crate) async fn get_callback_handler(
     query: Query<CallbackQuery>,
     session: Session,
     State(state): State<AppState>,
-) -> Response {
+) -> Result<Response, AppError> {
     let cognito_state = build_cognito_state(&state);
-    let _response = callback(query, session.clone(), State(cognito_state))
+    let _response = callback(query, session.clone(), State(cognito_state)).await?;
+    let email = session
+        .get::<String>("email")
         .await
-        .unwrap_or_else(|e| {
-            error!("cognito callback failed: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "An internal error occurred",
-            )
-                .into_response()
-        });
-    let email = match session.get::<String>("email").await {
-        Ok(email) => email,
-        Err(e) => {
-            error!("session lookup failed: {e}");
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "An internal error occurred",
-            )
-                .into_response();
-        }
-    };
+        .map_err(|e| anyhow::anyhow!("session lookup failed: {e}"))?;
     if let Some(email) = email
         && let Err(e) = upsert_user(&state.db, &email).await
     {
-        error!("upsert_user failed: {e}");
-        return (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "An internal error occurred",
-        )
-            .into_response();
+        return Err(anyhow::anyhow!("upsert_user failed: {e}").into());
     }
 
     // If gateway federation is configured, redirect to gateway Cognito for
     // silent SSO to provision an API key automatically.
     if is_gateway_configured(&state.config) {
         match initiate_gateway_login(&session, &state.config).await {
-            Ok(authorize_url) => return Redirect::to(&authorize_url).into_response(),
+            Ok(authorize_url) => return Ok(Redirect::to(&authorize_url).into_response()),
             Err(e) => {
                 warn!("failed to initiate gateway login, continuing without: {e}");
             }
         }
     }
 
-    Redirect::to("/").into_response()
+    Ok(Redirect::to("/").into_response())
 }
 
 pub(crate) async fn get_logout_handler(session: Session) -> impl IntoResponse {

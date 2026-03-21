@@ -70,7 +70,8 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
       setSaveResult("success");
       setApiKey("");
       await loadSettings();
-    } catch {
+    } catch (e) {
+      console.error("Failed to save API key", e);
       setSaveResult("error");
     } finally {
       setSaving(false);
@@ -102,7 +103,8 @@ export default function SettingsPanel({ onClose, preferences, onTogglePreference
       }
       setRenewResult("success");
       await loadSettings();
-    } catch {
+    } catch (e) {
+      console.error("Failed to renew API key", e);
       setRenewResult("error");
     } finally {
       setRenewing(false);

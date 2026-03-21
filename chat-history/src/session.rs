@@ -34,11 +34,15 @@ pub async fn list_chat_sessions(
 ) -> Result<Vec<ChatSession>> {
     let mut ssh_handle = connect_ssh(guest_ip, ssh_key_path, ssh_user, vm_host_key_path).await?;
     let sftp = open_sftp_session(&mut ssh_handle).await?;
-    let project_dirs = find_all_project_dirs(&sftp, ssh_user_home).await;
+    let project_dirs = find_all_project_dirs(&sftp, ssh_user_home).await?;
     let mut all_chat_sessions = Vec::new();
     for project_dir in &project_dirs {
         let dir_entries: Vec<DirEntry> = sftp
-            .read_dir(project_dir.to_str().expect("path is valid UTF-8"))
+            .read_dir(
+                project_dir
+                    .to_str()
+                    .context("path is not valid UTF-8")?,
+            )
             .await?
             .collect();
         for dir_entry in &dir_entries {
@@ -68,7 +72,10 @@ pub async fn delete_chat_session(
     let mut ssh_handle = connect_ssh(guest_ip, ssh_key_path, ssh_user, vm_host_key_path).await?;
     let sftp = open_sftp_session(&mut ssh_handle).await?;
     let path = project_dir.join(Path::new(session_id).with_extension("jsonl"));
-    sftp.remove_file(path.to_str().expect("path is valid UTF-8"))
+    sftp.remove_file(
+        path.to_str()
+            .context("path is not valid UTF-8")?,
+    )
         .await?;
     delete_session_dir(&sftp, project_dir, session_id).await
 }
@@ -80,7 +87,11 @@ async fn delete_session_dir(
 ) -> Result<()> {
     let dir_path = project_dir.join(session_id);
     if let Ok(true) = sftp
-        .try_exists(dir_path.to_str().expect("path is valid UTF-8"))
+        .try_exists(
+            dir_path
+                .to_str()
+                .context("path is not valid UTF-8")?,
+        )
         .await
     {
         remove_dir_all(sftp, &dir_path, 2).await
@@ -104,7 +115,11 @@ fn remove_dir_all<'a>(
                 }
                 remove_dir_all(sftp, &entry_path, max_depth - 1).await?;
             } else {
-                sftp.remove_file(entry_path.to_str().expect("path is valid UTF-8"))
+                sftp.remove_file(
+                    entry_path
+                        .to_str()
+                        .context("path is not valid UTF-8")?,
+                )
                     .await?;
             }
         }
@@ -114,13 +129,19 @@ fn remove_dir_all<'a>(
 
 async fn list_dir_entries(sftp: &SftpSession, path: &Path) -> Result<Vec<DirEntry>> {
     Ok(sftp
-        .read_dir(path.to_str().expect("path is valid UTF-8"))
+        .read_dir(
+            path.to_str()
+                .context("path is not valid UTF-8")?,
+        )
         .await?
         .collect())
 }
 
 async fn remove_sftp_dir(sftp: &SftpSession, path: &Path) -> Result<()> {
-    sftp.remove_dir(path.to_str().expect("path is valid UTF-8"))
+    sftp.remove_dir(
+        path.to_str()
+            .context("path is not valid UTF-8")?,
+    )
         .await?;
     Ok(())
 }
@@ -137,6 +158,7 @@ fn extract_custom_title(contents: &str) -> Option<String> {
     contents
         .lines()
         .rev()
+        // JSONL file contains mixed event types; skip lines that don't match.
         .filter_map(|line| serde_json::from_str::<CustomTitleEntry>(line).ok())
         .filter(|e| e.type_ == "custom-title")
         .find_map(|e| e.custom_title.filter(|t| !t.is_empty()))
@@ -191,7 +213,7 @@ async fn build_chat_session_with_title(
         session_id: session_id.to_owned(),
         project_dir: project_dir
             .to_str()
-            .expect("path is valid UTF-8")
+            .context("path is not valid UTF-8")?
             .to_owned(),
         title,
         last_active_at,
@@ -200,7 +222,10 @@ async fn build_chat_session_with_title(
 
 async fn fetch_session_title(sftp: &SftpSession, path: &Path) -> Result<Option<String>> {
     let mut file = sftp
-        .open(path.to_str().expect("path is valid UTF-8"))
+        .open(
+            path.to_str()
+                .context("path is not valid UTF-8")?,
+        )
         .await?;
     let mut contents = String::new();
     file.read_to_string(&mut contents).await?;
@@ -318,14 +343,14 @@ mod tests {
     }
 
     const FIXTURE_CUSTOM_TITLE: &str =
-        r#"{"type":"custom-title","customTitle":"fix-mobile-layout-settings"}"#;
+        r#"{"type":"custom-title","customTitle":"my-custom-title"}"#;
 
     #[test]
     fn test_custom_title_preferred_over_user_message() {
         let jsonl = [FIXTURE_FIRST_USER, FIXTURE_CUSTOM_TITLE].join("\n");
         assert_eq!(
             extract_session_title(&jsonl).as_deref(),
-            Some("fix-mobile-layout-settings")
+            Some("my-custom-title")
         );
     }
 

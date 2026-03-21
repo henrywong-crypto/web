@@ -20,7 +20,9 @@ config = "0.15.21"
 download = { path = "../download" }
 firecracker-manager = { path = "../firecracker-manager" }
 futures = "0.3.32"
-handlers = { git = "https://github.com/llm-proxy-rs/cognito.git", version = "0.1.0" }
+handlers = { path = "../../cognito/handlers" }
+authorize = { path = "../../cognito/authorize" }
+token = { path = "../../cognito/token" }
 html-escape = "0.2.13"
 reqwest = { version = "0.12", features = ["json"] }
 russh = "0.57.1"

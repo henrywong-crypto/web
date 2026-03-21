@@ -34,7 +34,8 @@ pub(crate) async fn gateway_callback_handler(
     let stored_state = session
         .get::<String>("gateway_oauth_state")
         .await
-        .unwrap_or(None);
+        .ok()
+        .flatten();
     let _ = session.remove::<String>("gateway_oauth_state").await;
 
     if stored_state.as_deref() != Some(&query.state) {
@@ -51,19 +52,10 @@ pub(crate) async fn gateway_callback_handler(
         }
     };
 
-    // Check if this is a renew flow (force_new)
-    let is_renew = session
-        .get::<bool>("gateway_renew_flow")
-        .await
-        .unwrap_or(None)
-        .unwrap_or(false);
-    let _ = session.remove::<bool>("gateway_renew_flow").await;
-
     // Provision API key
     let api_key = match provision_gateway_api_key(
         &access_token,
         &state.config.gateway_api_url,
-        is_renew,
     )
     .await
     {
@@ -89,7 +81,7 @@ pub(crate) async fn gateway_callback_handler(
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
         None,
-    );
+    )?;
 
     if let Err(e) = set_vm_settings(
         user_vm.guest_ip,

@@ -105,41 +105,55 @@ fn cmd_tap_delete(tap_name: &str) -> Result<()> {
 
 fn cmd_setup_nat(iface: &str) -> Result<()> {
     std::fs::write("/proc/sys/net/ipv4/ip_forward", "1").context("failed to enable ip_forward")?;
-    run_cmd("iptables", &["-P", "FORWARD", "ACCEPT"])?;
-    // Block VMs from reaching the host EC2 IMDS so they cannot acquire
-    // IAM credentials directly (Bedrock access should only come via MMDS
-    // when explicitly configured).
-    let _ = Command::new("iptables")
-        .args(["-D", "FORWARD", "-s", "172.16.0.0/16", "-d", "169.254.169.254", "-j", "DROP"])
-        .stderr(std::process::Stdio::null())
-        .status();
-    run_cmd("iptables", &["-I", "FORWARD", "-s", "172.16.0.0/16", "-d", "169.254.169.254", "-j", "DROP"])?;
-    let _ = Command::new("iptables")
-        .args([
-            "-t",
-            "nat",
-            "-D",
-            "POSTROUTING",
-            "-o",
-            iface,
-            "-j",
-            "MASQUERADE",
-        ])
-        .stderr(std::process::Stdio::null())
-        .status();
-    run_cmd(
+
+    // Default deny on FORWARD — only explicitly allowed traffic passes.
+    run_cmd("iptables", &["-P", "FORWARD", "DROP"])?;
+
+    // Allow established/related connections (replies to allowed outbound traffic).
+    idempotent_insert("iptables", &["-I", "FORWARD", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"])?;
+
+    // Allow VM traffic to the public internet only — forward to host's
+    // outbound interface. Combined with the RFC 1918 + link-local drops
+    // below, this permits only internet-bound traffic.
+    idempotent_insert("iptables", &["-I", "FORWARD", "-s", "172.16.0.0/16", "-o", iface, "-j", "ACCEPT"])?;
+
+    // Block VMs from reaching all private networks (RFC 1918) and link-local.
+    // These rules are higher priority than the ACCEPT above (-I prepends).
+    idempotent_insert("iptables", &["-I", "FORWARD", "-s", "172.16.0.0/16", "-d", "10.0.0.0/8", "-j", "DROP"])?;
+    idempotent_insert("iptables", &["-I", "FORWARD", "-s", "172.16.0.0/16", "-d", "172.16.0.0/12", "-j", "DROP"])?;
+    idempotent_insert("iptables", &["-I", "FORWARD", "-s", "172.16.0.0/16", "-d", "192.168.0.0/16", "-j", "DROP"])?;
+    idempotent_insert("iptables", &["-I", "FORWARD", "-s", "172.16.0.0/16", "-d", "169.254.0.0/16", "-j", "DROP"])?;
+
+    // Block VMs from reaching host services directly (INPUT chain).
+    // Allow ESTABLISHED/RELATED so the host can still SSH into VMs.
+    idempotent_insert("iptables", &["-I", "INPUT", "-s", "172.16.0.0/16", "-m", "conntrack", "--ctstate", "ESTABLISHED,RELATED", "-j", "ACCEPT"])?;
+    idempotent_insert("iptables", &["-I", "INPUT", "-s", "172.16.0.0/16", "-j", "DROP"])?;
+
+    idempotent_append(
         "iptables",
-        &[
-            "-t",
-            "nat",
-            "-A",
-            "POSTROUTING",
-            "-o",
-            iface,
-            "-j",
-            "MASQUERADE",
-        ],
+        &["-t", "nat", "-A", "POSTROUTING", "-o", iface, "-j", "MASQUERADE"],
     )
+}
+
+/// Insert a rule, removing any existing duplicate first.
+fn idempotent_insert(prog: &str, args: &[&str]) -> Result<()> {
+    // Build the delete version: replace -I with -D
+    let delete_args: Vec<&str> = args.iter().map(|a| if *a == "-I" { "-D" } else { a }).collect();
+    let _ = Command::new(prog)
+        .args(&delete_args)
+        .stderr(std::process::Stdio::null())
+        .status();
+    run_cmd(prog, args)
+}
+
+/// Append a rule, removing any existing duplicate first.
+fn idempotent_append(prog: &str, args: &[&str]) -> Result<()> {
+    let delete_args: Vec<&str> = args.iter().map(|a| if *a == "-A" { "-D" } else { a }).collect();
+    let _ = Command::new(prog)
+        .args(&delete_args)
+        .stderr(std::process::Stdio::null())
+        .status();
+    run_cmd(prog, args)
 }
 
 fn raise_ambient_net_admin() -> Result<()> {

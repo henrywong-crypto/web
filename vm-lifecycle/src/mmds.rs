@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
-use tracing::warn;
+use tracing::{error, warn};
 
 use crate::VmRegistry;
 use crate::iam::{HostIamCredential, fetch_host_iam_credentials};
@@ -15,14 +15,14 @@ pub async fn refresh_all_vm_mmds(vms: &VmRegistry, use_iam_creds: bool, iam_role
     }
     let Some(host_iam_credential) = fetch_host_iam_credentials(iam_role_name)
         .await
-        .map_err(|e| warn!("failed to fetch host IAM credentials: {e}"))
+        .map_err(|e| error!("failed to fetch host IAM credentials: {e}"))
         .ok()
     else {
         return;
     };
     let vm_socket_paths: HashMap<String, PathBuf> = {
         let Ok(registry) = vms.lock() else {
-            warn!("vm registry mutex poisoned");
+            error!("vm registry mutex poisoned");
             return;
         };
         registry
@@ -32,9 +32,9 @@ pub async fn refresh_all_vm_mmds(vms: &VmRegistry, use_iam_creds: bool, iam_role
             .collect()
     };
     for (vm_id, socket_path) in vm_socket_paths {
-        refresh_vm_mmds(&vm_id, &socket_path, &host_iam_credential)
-            .await
-            .unwrap_or_else(|e| warn!("failed to refresh mmds: {e}"));
+        if let Err(e) = refresh_vm_mmds(&vm_id, &socket_path, &host_iam_credential).await {
+            warn!("failed to refresh mmds: {e}");
+        }
     }
 }
 

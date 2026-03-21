@@ -35,7 +35,8 @@ export function dispatchSseEvent(
   let payload: unknown;
   try {
     payload = JSON.parse(data);
-  } catch {
+  } catch (e) {
+    console.warn("Failed to parse SSE data as JSON", e);
     return;
   }
   switch (eventName) {

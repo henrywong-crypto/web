@@ -23,7 +23,7 @@ pub fn build_api_key_settings_json(
     sonnet_model: &str,
     opus_model: &str,
     model: Option<&str>,
-) -> String {
+) -> Result<String> {
     let mut env = serde_json::json!({
         "ANTHROPIC_AUTH_TOKEN": api_key,
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": haiku_model,
@@ -42,7 +42,7 @@ pub fn build_api_key_settings_json(
     if let Some(m) = model {
         settings["model"] = serde_json::Value::String(m.to_string());
     }
-    settings.to_string()
+    serde_json::to_string_pretty(&settings).context("settings serialization failed")
 }
 
 pub async fn get_vm_settings(

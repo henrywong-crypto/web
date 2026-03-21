@@ -58,9 +58,9 @@ async fn run_terminal_session(
         error!("vm registry lock poisoned, aborting terminal session: {e}");
         return;
     }
-    run_ssh_relay(guest_ip, &state, ws)
-        .await
-        .unwrap_or_else(|e| error!("terminal session error: {e}"));
+    if let Err(e) = run_ssh_relay(guest_ip, &state, ws).await {
+        error!("terminal session error: {e}");
+    }
     save_and_drop_vm(&state, &vm_id, user_id).await;
 }
 
@@ -73,9 +73,9 @@ async fn save_and_drop_vm(state: &AppState, vm_id: &str, user_id: Uuid) {
         registry.remove(vm_id)
     };
     let Some(vm_entry) = vm_entry else { return };
-    save_vm_rootfs_on_disconnect(state, user_id, vm_entry)
-        .await
-        .unwrap_or_else(|e| error!("failed to save rootfs on disconnect: {e}"));
+    if let Err(e) = save_vm_rootfs_on_disconnect(state, user_id, vm_entry).await {
+        error!("failed to save rootfs on disconnect: {e}");
+    }
 }
 
 async fn save_vm_rootfs_on_disconnect(
@@ -194,9 +194,9 @@ async fn relay_ws_to_ssh(
             }
         }
         Some(Ok(Message::Text(text))) => {
-            handle_resize_message(ssh_channel, &text)
-                .await
-                .unwrap_or_else(|e| warn!("handle_resize_message failed: {e}"));
+            if let Err(e) = handle_resize_message(ssh_channel, &text).await {
+                warn!("handle_resize_message failed: {e}");
+            }
             true
         }
         Some(Ok(Message::Ping(data))) => {

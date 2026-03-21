@@ -29,7 +29,7 @@ export default function ModelChip() {
       .then((data) => {
         if (!cancelled) setModel(data.model ?? "sonnet");
       })
-      .catch(() => {});
+      .catch((e) => { console.error("Failed to load settings", e); });
     return () => { cancelled = true; };
   }, []);
 
@@ -54,7 +54,8 @@ export default function ModelChip() {
         body: JSON.stringify({ model: value }),
       });
       setSaveResult(res.ok ? "success" : "error");
-    } catch {
+    } catch (e) {
+      console.error("Failed to update model", e);
       setSaveResult("error");
     }
   }, [csrfFetch]);

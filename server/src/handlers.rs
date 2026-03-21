@@ -157,7 +157,7 @@ pub(crate) async fn get_or_create_terminal(
             &state.config.anthropic_default_sonnet_model,
             &state.config.anthropic_default_opus_model,
             None,
-        );
+        )?;
         if let Err(e) = chat_settings::set_vm_settings(
             user_vm.guest_ip,
             &state.config.ssh_key_path,
@@ -344,19 +344,15 @@ pub(crate) async fn list_chat_sessions_handler(
     user_vm: UserVm,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    Ok(list_chat_sessions(
+    let sessions = list_chat_sessions(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
         &state.config.vm_host_key_path,
         &state.config.ssh_user_home,
     )
-    .await
-    .map(|sessions| Json(sessions).into_response())
-    .unwrap_or_else(|e| {
-        error!("list_chat_sessions failed: {e}");
-        (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response()
-    }))
+    .await?;
+    Ok(Json(sessions).into_response())
 }
 
 #[derive(Deserialize)]
@@ -370,7 +366,7 @@ pub(crate) async fn get_chat_transcript_handler(
     Query(query): Query<TranscriptQuery>,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    Ok(fetch_chat_history(
+    let history = fetch_chat_history(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
@@ -378,12 +374,8 @@ pub(crate) async fn get_chat_transcript_handler(
         &query.session_id,
         Path::new(&query.project_dir),
     )
-    .await
-    .map(|history| Json(history).into_response())
-    .unwrap_or_else(|e| {
-        error!("fetch_chat_history failed: {e}");
-        (StatusCode::NOT_FOUND, "Transcript not found").into_response()
-    }))
+    .await?;
+    Ok(Json(history).into_response())
 }
 
 #[derive(Deserialize)]
@@ -441,7 +433,7 @@ async fn stream_chat_attachment(multipart: &mut Multipart, sftp: &SftpSession) -
                 .file_name()
                 .context("file upload missing filename")?
                 .to_owned();
-            let remote_path = build_chat_upload_path(&filename);
+            let remote_path = build_chat_upload_path(&filename)?;
             let real_path = PathBuf::from(
                 timeout(
                     Duration::from_secs(SFTP_OP_TIMEOUT_SECS),
@@ -472,13 +464,13 @@ async fn stream_chat_attachment(multipart: &mut Multipart, sftp: &SftpSession) -
     Err(anyhow!("missing 'file' field"))
 }
 
-fn build_chat_upload_path(filename: &str) -> PathBuf {
+fn build_chat_upload_path(filename: &str) -> Result<PathBuf> {
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .expect("system clock is before Unix epoch")
+        .context("system clock is before Unix epoch")?
         .as_millis();
     let safe_name = sanitize_filename::sanitize(filename);
-    PathBuf::from("/tmp").join(format!("{ts}_{safe_name}"))
+    Ok(PathBuf::from("/tmp").join(format!("{ts}_{safe_name}")))
 }
 
 async fn write_chat_file_via_sftp(

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use axum::{
     Json,
     extract::State,
@@ -64,7 +65,7 @@ pub(crate) async fn put_settings_handler(
             &state.config.anthropic_default_sonnet_model,
             &state.config.anthropic_default_opus_model,
             body.model.as_deref(),
-        );
+        )?;
         set_vm_settings(
             user_vm.guest_ip,
             &state.config.ssh_key_path,
@@ -82,8 +83,8 @@ pub(crate) async fn put_settings_handler(
             &state.config.vm_host_key_path,
         )
         .await?;
-        let mut settings: serde_json::Value = serde_json::from_str(raw.trim())
-            .unwrap_or_else(|_| serde_json::json!({}));
+        let mut settings: serde_json::Value =
+            serde_json::from_str(raw.trim()).context("failed to parse settings JSON")?;
         settings["model"] = serde_json::Value::String(model.clone());
         let content = settings.to_string();
         set_vm_settings(
