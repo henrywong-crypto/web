@@ -22,11 +22,20 @@ pub(crate) async fn csrf_middleware(session: Session, request: Request, next: Ne
         Some(token) => token.to_owned(),
         None => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
     };
-    let new_token = match validate_csrf(&session, &submitted).await {
-        Ok(Some(token)) => token,
+    // Atomically consume the stored token so it cannot be reused.
+    let stored = match session.remove::<String>("csrf_token").await {
+        Ok(Some(s)) => s,
         Ok(None) => return (StatusCode::FORBIDDEN, "Forbidden").into_response(),
         Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response(),
     };
+    if !constant_time_eq(&stored, &submitted) {
+        return (StatusCode::FORBIDDEN, "Forbidden").into_response();
+    }
+    // Rotate: generate a fresh token for the next request.
+    let new_token = generate_token();
+    if let Err(_) = session.insert("csrf_token", &new_token).await {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
+    }
     let mut response = next.run(request).await;
     attach_csrf_token(&mut response, &new_token);
     response
@@ -37,7 +46,7 @@ pub(crate) async fn get_csrf_token(session: &Session) -> Result<String> {
         .get::<String>("csrf_token")
         .await
         .context("failed to read csrf_token from session")?
-        .unwrap_or_else(|| Uuid::new_v4().to_string().replace('-', ""));
+        .unwrap_or_else(generate_token);
     session
         .insert("csrf_token", &token)
         .await
@@ -45,26 +54,12 @@ pub(crate) async fn get_csrf_token(session: &Session) -> Result<String> {
     Ok(token)
 }
 
-async fn validate_csrf(session: &Session, submitted: &str) -> Result<Option<String>> {
-    let stored = match session
-        .get::<String>("csrf_token")
-        .await
-        .context("failed to read CSRF token from session")?
-    {
-        Some(s) => s,
-        None => return Ok(None),
-    };
-    if stored.len() != submitted.len()
-        || stored.as_bytes().ct_eq(submitted.as_bytes()).unwrap_u8() != 1
-    {
-        return Ok(None);
-    }
-    let new_token = Uuid::new_v4().to_string().replace('-', "");
-    session
-        .insert("csrf_token", &new_token)
-        .await
-        .context("failed to store CSRF token")?;
-    Ok(Some(new_token))
+fn generate_token() -> String {
+    Uuid::new_v4().to_string().replace('-', "")
+}
+
+fn constant_time_eq(a: &str, b: &str) -> bool {
+    a.len() == b.len() && a.as_bytes().ct_eq(b.as_bytes()).unwrap_u8() == 1
 }
 
 fn attach_csrf_token(response: &mut Response, csrf_token: &str) {
