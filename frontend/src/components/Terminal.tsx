@@ -14,7 +14,10 @@ const TERMINAL_OPTIONS: ITerminalOptions = {
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
-const MAX_RECONNECT_ATTEMPTS = 10;
+// Number of silent WS reconnect attempts before falling back to a full page
+// reload.  A reload lets the server assign a fresh VM (with a new vmId) when
+// the original VM was swept for idleness.
+const MAX_RECONNECT_ATTEMPTS = 5;
 
 function buildWsUrl(vmId: string): string {
   const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -32,6 +35,9 @@ export default function Terminal({ visible }: { visible: boolean }) {
   const messageBufferRef = useRef<ArrayBuffer[]>([]);
   // Track the latest onData disposable so we can re-wire on reconnect
   const dataDisposableRef = useRef<{ dispose(): void } | null>(null);
+  // Track consecutive connection failures (open never fires before close)
+  const consecutiveFailRef = useRef(0);
+
   // Reconnect state
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -52,6 +58,7 @@ export default function Terminal({ visible }: { visible: boolean }) {
 
     ws.addEventListener("open", () => {
       reconnectAttemptRef.current = 0;
+      consecutiveFailRef.current = 0;
       const term = termRef.current;
       if (term) {
         // Re-wire input to the new WS
@@ -64,6 +71,7 @@ export default function Terminal({ visible }: { visible: boolean }) {
     });
 
     ws.addEventListener("close", () => {
+      consecutiveFailRef.current++;
       const term = termRef.current;
       if (term) {
         term.write("\r\n\x1b[2mreconnecting…\x1b[0m\r\n");
@@ -85,10 +93,9 @@ export default function Terminal({ visible }: { visible: boolean }) {
     if (unmountedRef.current) return;
     const attempt = reconnectAttemptRef.current;
     if (attempt >= MAX_RECONNECT_ATTEMPTS) {
-      const term = termRef.current;
-      if (term) {
-        term.write("\r\n\x1b[2munable to reconnect\x1b[0m\r\n");
-      }
+      // Retries exhausted — the vmId is likely stale (VM was idle-swept and
+      // replaced).  Reload so the server assigns a fresh VM with a new ID.
+      window.location.reload();
       return;
     }
     const delay = Math.min(
