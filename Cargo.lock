@@ -876,6 +876,7 @@ dependencies = [
  "serde_json",
  "ssh-client",
  "tokio",
+ "url",
 ]
 
 [[package]]

@@ -52,7 +52,8 @@ CHROOT_ROOT_SCRIPT = """\
 set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y curl logrotate
+apt-get install -y curl logrotate socat
+loginctl enable-linger ubuntu || mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/ubuntu
 curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 """
 
@@ -275,7 +276,7 @@ def install_claude_code(rootfs: Path) -> None:
     chroot_as_ubuntu(rootfs, CHROOT_USER_SCRIPT)
 
 
-def install_agent(rootfs: Path, mcp_url: str | None = None) -> None:
+def install_agent(rootfs: Path) -> None:
     opt = rootfs / "opt"
     opt.mkdir(exist_ok=True)
     shutil.copy(str(AGENT_PY), str(opt / "agent.py"))
@@ -287,14 +288,6 @@ def install_agent(rootfs: Path, mcp_url: str | None = None) -> None:
     service_dest = systemd_system / "agent.service"
     shutil.copy(str(AGENT_SERVICE), str(service_dest))
 
-    # Inject MCP_URL into the systemd unit so the agent can discover the MCP server.
-    if mcp_url:
-        service_text = service_dest.read_text()
-        service_text = service_text.replace(
-            "Environment=PYTHONUNBUFFERED=1",
-            f"Environment=PYTHONUNBUFFERED=1\nEnvironment=MCP_URL={mcp_url}",
-        )
-        service_dest.write_text(service_text)
     multi_user_wants = systemd_system / "multi-user.target.wants"
     multi_user_wants.mkdir(exist_ok=True)
     service_link = multi_user_wants / "agent.service"
@@ -314,7 +307,7 @@ def install_agent(rootfs: Path, mcp_url: str | None = None) -> None:
             "-",
             "ubuntu",
             "-c",
-            "bash -lc '/usr/local/bin/uv run --with claude-agent-sdk --with aiohttp"
+            "bash -lc '/usr/local/bin/uv run --with claude-agent-sdk"
             ' python3 -c "import claude_agent_sdk"\'',
         ],
     )
@@ -551,11 +544,6 @@ def main() -> None:
         action="store_true",
         help="Skip the Firecracker smoke test after building",
     )
-    parser.add_argument(
-        "--mcp-url",
-        default=None,
-        help="MCP server URL (injected as MCP_URL env var in agent.service)",
-    )
     args = parser.parse_args()
 
     workdir = args.workdir or Path(tempfile.mkdtemp(prefix="fc-build-"))
@@ -587,7 +575,7 @@ def main() -> None:
     try:
         install_system_packages(rootfs)
         install_claude_code(rootfs)
-        install_agent(rootfs, mcp_url=args.mcp_url)
+        install_agent(rootfs)
     finally:
         unmount_binds(mounts)
 

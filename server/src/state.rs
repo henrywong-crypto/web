@@ -95,6 +95,8 @@ pub(crate) struct AppConfig {
     pub(crate) iam_role_name: String,
     #[serde(default)]
     pub(crate) anthropic_base_url: Option<String>,
+    #[serde(default)]
+    pub(crate) mcp_base_url: Option<String>,
     #[serde(default = "default_anthropic_default_haiku_model")]
     pub(crate) anthropic_default_haiku_model: String,
     #[serde(default = "default_anthropic_default_sonnet_model")]
