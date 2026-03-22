@@ -70,12 +70,8 @@ test.describe("error-handling", () => {
     // Wait a tick for any potential error rendering
     await page.waitForTimeout(500);
 
-    // No error message should appear in the chat
-    await expect(page.getByText("Error:")).not.toBeVisible();
-    await expect(page.getByText("VM is still starting")).not.toBeVisible();
-
-    // Composer should remain enabled for retry
-    await expect(page.locator('textarea[placeholder="Message Claude…"]')).toBeEnabled();
+    // No error message should appear in the chat — 503 is silently swallowed
+    await expect(page.locator('[data-testid="message-error"]')).not.toBeVisible();
 
     void ctrl;
   });

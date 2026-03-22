@@ -102,11 +102,11 @@ test.describe("markdown sanitization", () => {
 
     await sendMessage(page, "test");
     app.sendSseEvents(sse.text(
-      '<script>window.__xss = true</script>Hello',
+      'Safe text before\n\n<script>window.__xss = true</script>\n\nSafe text after',
       "sess-1",
     ));
 
-    await expect(page.getByText("Hello")).toBeVisible();
+    await expect(page.getByText("Safe text before")).toBeVisible();
 
     // Verify the script did not execute
     const xss = await page.evaluate(() => (window as any).__xss);
@@ -139,8 +139,12 @@ test.describe("markdown sanitization", () => {
 
     await expect(page.getByText("click me")).toBeVisible();
 
-    // The href should be stripped or replaced, not javascript:
+    // The sanitizer should either strip the href entirely (null) or replace it
+    // with a safe value — either way, javascript: must not survive.
     const href = await page.getByText("click me").getAttribute("href");
-    expect(href).not.toContain("javascript:");
+    if (href !== null) {
+      expect(href).not.toContain("javascript:");
+    }
+    // If href is null, the sanitizer stripped it completely — that's even safer.
   });
 });
