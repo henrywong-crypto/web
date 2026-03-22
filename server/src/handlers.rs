@@ -183,7 +183,6 @@ async fn write_initial_settings(
             &state.config.anthropic_default_haiku_model,
             &state.config.anthropic_default_sonnet_model,
             &state.config.anthropic_default_opus_model,
-            state.config.enable_mcp,
         )?,
         None => return write_bedrock_settings(state, guest_ip).await,
     };
@@ -211,7 +210,6 @@ async fn write_gateway_settings_with_key(
         &state.config.anthropic_default_haiku_model,
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
-        state.config.enable_mcp,
     )?;
     chat_settings::set_vm_settings(
         guest_ip,
@@ -234,7 +232,6 @@ async fn write_bedrock_settings(state: &AppState, guest_ip: Ipv4Addr) -> Result<
         &state.config.anthropic_default_haiku_model,
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
-        state.config.enable_mcp,
     )?;
     chat_settings::set_vm_settings(
         guest_ip,
