@@ -55,6 +55,7 @@ export default function FileManager({ onClose }: { onClose?: () => void }) {
     async (file: File) => {
       flushSync(() => setUploadStatus("Uploading…"));
       const formData = new FormData();
+      formData.append("dir", currentPath);
       formData.append("file", file);
       try {
         const res = await csrfFetch(uploadAction, {
