@@ -51,7 +51,10 @@ function AppContent() {
     deleteSession,
     syncConversationsFromHistory,
   } = useSse();
-  const [activeTab, setActiveTab] = useState<ViewTab>("chat");
+  const [activeTab, setActiveTab] = useState<ViewTab>(() => {
+    const saved = sessionStorage.getItem("active-tab");
+    return saved === "terminal" ? "terminal" : "chat";
+  });
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [runningConversationIds, setRunningConversationIds] = useState<
@@ -66,6 +69,10 @@ function AppContent() {
     const saved = localStorage.getItem("ui-theme");
     return saved ? saved === "dark" : true;
   });
+
+  React.useEffect(() => {
+    sessionStorage.setItem("active-tab", activeTab);
+  }, [activeTab]);
 
   React.useEffect(() => {
     if (darkMode) {
