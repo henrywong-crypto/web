@@ -100,9 +100,13 @@ pub(crate) async fn provision_gateway_api_key(
 
     let mut builder = reqwest::Client::builder();
     if accept_invalid_certs {
-        // The default rustls-platform-verifier ignores danger_accept_invalid_certs,
-        // so we must supply a custom rustls config that skips all verification.
-        let tls_config = rustls::ClientConfig::builder()
+        // The default rustls-platform-verifier rejects self-signed certs and
+        // cannot be overridden via danger_accept_invalid_certs, so we supply a
+        // custom rustls config that skips all certificate verification.
+        let provider = rustls::crypto::aws_lc_rs::default_provider();
+        let tls_config = rustls::ClientConfig::builder_with_provider(Arc::new(provider))
+            .with_safe_default_protocol_versions()
+            .context("failed to configure TLS protocol versions")?
             .dangerous()
             .with_custom_certificate_verifier(Arc::new(NoVerifier))
             .with_no_client_auth();
@@ -194,7 +198,7 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
     }
 
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::crypto::ring::default_provider()
+        rustls::crypto::aws_lc_rs::default_provider()
             .signature_verification_algorithms
             .supported_schemes()
     }
