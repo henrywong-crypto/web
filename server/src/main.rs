@@ -40,7 +40,7 @@ use crate::{
     },
     csrf::csrf_middleware,
     download::download_file_handler,
-    files::list_files_handler,
+    files::{delete_handler, list_files_handler},
     gateway_auth::renew_gateway_key_handler,
     gateway_callback::gateway_callback_handler,
     handlers::{
@@ -119,6 +119,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
             post(handle_chat_upload).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
         )
         .route("/ls", get(list_files_handler))
+        .route("/delete", post(delete_handler))
         .route("/download", get(download_file_handler))
         .route(
             "/upload",
