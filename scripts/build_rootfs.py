@@ -35,18 +35,6 @@ ROOTFS_DIR = Path(__file__).parent.parent / "rootfs"
 AGENT_PY = ROOTFS_DIR / "agent.py"
 AGENT_SERVICE = ROOTFS_DIR / "agent.service"
 
-CLAUDE_SETTINGS = """\
-{
-  "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "env": {
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "us.anthropic.claude-opus-4-6-v1",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "us.anthropic.claude-sonnet-4-6",
-    "CLAUDE_CODE_USE_BEDROCK": "1"
-  }
-}
-"""
-
 # Runs as root inside the chroot.
 CHROOT_ROOT_SCRIPT = """\
 set -e
@@ -344,10 +332,9 @@ WantedBy=multi-user.target
         print("warning: uv prewarm failed (agent will install deps on first run)")
 
 
-def write_claude_settings(rootfs: Path) -> None:
+def ensure_claude_dir(rootfs: Path) -> None:
     claude_dir = rootfs / "home/ubuntu/.claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
-    (claude_dir / "settings.json").write_text(CLAUDE_SETTINGS)
     run(["chown", "-R", "1000:1000", str(claude_dir)])
 
 
@@ -613,7 +600,7 @@ def main() -> None:
     finally:
         unmount_binds(mounts)
 
-    write_claude_settings(rootfs)
+    ensure_claude_dir(rootfs)
     ext4 = build_ext4_image(workdir, rootfs, ubuntu_name)
     kernel_dest, ext4_dest, client_key_dest, host_key_pub_dest = install_artifacts(
         kernel, ext4, client_ssh_key, host_ssh_key_pub, ubuntu_name

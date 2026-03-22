@@ -13,7 +13,6 @@ const MCP_PROXY_LOCAL_PORT: u16 = 8443;
 
 pub struct VmSettings {
     pub has_api_key: bool,
-    pub uses_bedrock: bool,
     pub model: Option<String>,
 }
 
@@ -52,6 +51,23 @@ pub fn build_api_key_settings_json(
             }
         });
     }
+    serde_json::to_string_pretty(&settings).context("settings serialization failed")
+}
+
+pub fn build_bedrock_settings_json(
+    haiku_model: &str,
+    sonnet_model: &str,
+    opus_model: &str,
+) -> Result<String> {
+    let settings = serde_json::json!({
+        "$schema": "https://json.schemastore.org/claude-code-settings.json",
+        "env": {
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": haiku_model,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": sonnet_model,
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": opus_model,
+            "CLAUDE_CODE_USE_BEDROCK": "1",
+        },
+    });
     serde_json::to_string_pretty(&settings).context("settings serialization failed")
 }
 
@@ -101,10 +117,6 @@ fn parse_vm_settings(stdout: &str) -> Result<VmSettings> {
             .and_then(|v| v.get("ANTHROPIC_AUTH_TOKEN"))
             .and_then(|v| v.as_str())
             .is_some_and(|s| !s.is_empty()),
-        uses_bedrock: env
-            .and_then(|v| v.get("CLAUDE_CODE_USE_BEDROCK"))
-            .and_then(|v| v.as_str())
-            .is_some_and(|s| s == "1" || s.eq_ignore_ascii_case("true")),
         model: settings
             .get("model")
             .and_then(|v| v.as_str())

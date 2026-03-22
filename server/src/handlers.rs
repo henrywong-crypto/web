@@ -131,8 +131,8 @@ impl FromRequestParts<AppState> for UserVm {
                 let user_vm = provision_new_vm(state, db_user.id)
                     .await
                     .map_err(IntoResponse::into_response)?;
-                // Write gateway settings to the freshly provisioned VM
-                write_gateway_settings(parts, state, user_vm.guest_ip).await;
+                // Write settings to the freshly provisioned VM
+                write_initial_settings(parts, state, user_vm.guest_ip).await;
                 return Ok(user_vm);
             }
         };
@@ -144,17 +144,24 @@ impl FromRequestParts<AppState> for UserVm {
     }
 }
 
-/// Best-effort write of gateway API key settings to a VM. Extracts the session
-/// from the request parts and writes the settings file via SSH. Errors are
-/// logged but not propagated so callers are not blocked by transient SSH issues.
-async fn write_gateway_settings(parts: &mut Parts, state: &AppState, guest_ip: Ipv4Addr) {
+/// Best-effort write of initial settings to a freshly provisioned VM.
+/// If a gateway API key is available in the session, writes API key settings.
+/// Otherwise, if using Bedrock/IAM mode, writes Bedrock default settings so the
+/// VM has the correct model IDs from the server config (not baked into the rootfs).
+async fn write_initial_settings(parts: &mut Parts, state: &AppState, guest_ip: Ipv4Addr) {
     let session = match Session::from_request_parts(parts, state).await {
         Ok(s) => s,
-        Err(_) => return,
+        Err(_) => {
+            write_bedrock_settings(state, guest_ip).await;
+            return;
+        }
     };
     let gateway_key = match session.get::<String>("gateway_api_key").await {
         Ok(Some(key)) => key,
-        _ => return,
+        _ => {
+            write_bedrock_settings(state, guest_ip).await;
+            return;
+        }
     };
     let content = match chat_settings::build_api_key_settings_json(
         &gateway_key,
@@ -212,6 +219,37 @@ async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, g
     .await
     {
         error!("failed to write gateway settings to VM: {e}");
+    }
+}
+
+/// Best-effort write of Bedrock default settings to a VM.
+/// Only writes when running in IAM/Bedrock mode so the VM gets the correct
+/// model IDs from the server config rather than relying on a baked-in rootfs.
+async fn write_bedrock_settings(state: &AppState, guest_ip: Ipv4Addr) {
+    if !state.config.use_iam_creds {
+        return;
+    }
+    let content = match chat_settings::build_bedrock_settings_json(
+        &state.config.anthropic_default_haiku_model,
+        &state.config.anthropic_default_sonnet_model,
+        &state.config.anthropic_default_opus_model,
+    ) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("failed to build bedrock settings: {e}");
+            return;
+        }
+    };
+    if let Err(e) = chat_settings::set_vm_settings(
+        guest_ip,
+        &state.config.ssh_key_path,
+        &state.config.ssh_user,
+        &state.config.vm_host_key_path,
+        &content,
+    )
+    .await
+    {
+        error!("failed to write bedrock settings to VM: {e}");
     }
 }
 
@@ -312,9 +350,11 @@ pub(crate) async fn vm_status_handler(
     tokio::spawn(async move {
         match provision_new_vm(&state_clone, user_id).await {
             Ok(user_vm) => {
-                // Write gateway settings if available
+                // Write gateway settings if available, otherwise write bedrock defaults
                 if let Some(key) = gateway_key {
                     write_gateway_settings_with_key(&state_clone, user_vm.guest_ip, &key).await;
+                } else {
+                    write_bedrock_settings(&state_clone, user_vm.guest_ip).await;
                 }
             }
             Err(e) => {
