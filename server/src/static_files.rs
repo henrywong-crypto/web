@@ -62,15 +62,21 @@ pub(crate) async fn serve_font(
     Path(filename): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
+    let file_path = path::Path::new(&filename);
     // Only allow .woff2 files with safe filenames (no path traversal)
-    if !filename.ends_with(".woff2")
-        || filename.contains('/')
-        || filename.contains('\\')
-        || filename.contains("..")
+    if file_path.extension().and_then(|e| e.to_str()) != Some("woff2")
+        || file_path.file_name().map(path::Path::new) != Some(file_path)
     {
         return Ok(StatusCode::NOT_FOUND.into_response());
     }
-    let font_path = state.static_assets.fonts_dir.join(&filename);
+    let font_path = state.static_assets.fonts_dir.join(file_path);
+    let font_path = match font_path.canonicalize() {
+        Ok(p) => p,
+        Err(_) => return Ok(StatusCode::NOT_FOUND.into_response()),
+    };
+    if !font_path.starts_with(&state.static_assets.fonts_dir) {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
     let file = match File::open(&font_path).await {
         Ok(f) => f,
         Err(_) => return Ok(StatusCode::NOT_FOUND.into_response()),

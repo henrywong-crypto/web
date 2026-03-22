@@ -239,14 +239,14 @@ fn spawn_mmds_refresh_task(app_state: AppState) -> tokio::task::JoinHandle<()> {
         interval.tick().await;
         loop {
             interval.tick().await;
-            if let Err(e) = refresh_all_vm_mmds(
+            if let Err(_) = refresh_all_vm_mmds(
                 &app_state.vms,
                 app_state.config.use_iam_creds,
                 &app_state.config.iam_role_name,
             )
             .await
             {
-                tracing::error!("mmds refresh failed: {e}");
+                tracing::error!("mmds refresh failed");
             }
         }
     })

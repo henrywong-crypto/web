@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use axum::{
     Error as AxumError,
     extract::{
@@ -54,28 +54,30 @@ async fn run_terminal_session(
     user_id: Uuid,
     guest_ip: Ipv4Addr,
 ) {
-    if let Err(e) = update_vm_last_activity(&state.vms, &vm_id) {
-        error!("vm registry lock poisoned, aborting terminal session: {e}");
+    if let Err(_) = update_vm_last_activity(&state.vms, &vm_id) {
+        error!("vm registry lock poisoned, aborting terminal session");
         return;
     }
-    if let Err(e) = run_ssh_relay(guest_ip, &state, ws).await {
-        error!("terminal session error: {e}");
+    if let Err(_) = run_ssh_relay(guest_ip, &state, ws).await {
+        error!("terminal session error");
     }
-    save_and_drop_vm(&state, &vm_id, user_id).await;
+    if let Err(_) = save_and_drop_vm(&state, &vm_id, user_id).await {
+        error!("save and drop vm failed");
+    }
 }
 
-async fn save_and_drop_vm(state: &AppState, vm_id: &str, user_id: Uuid) {
+async fn save_and_drop_vm(state: &AppState, vm_id: &str, user_id: Uuid) -> Result<()> {
     let vm_entry = {
-        let Ok(mut registry) = state.vms.lock() else {
-            error!("vm registry lock poisoned on disconnect");
-            return;
-        };
+        let mut registry = state
+            .vms
+            .lock()
+            .map_err(|_| anyhow::anyhow!("vm registry lock poisoned on disconnect"))?;
         registry.remove(vm_id)
     };
-    let Some(vm_entry) = vm_entry else { return };
-    if let Err(e) = save_vm_rootfs_on_disconnect(state, user_id, vm_entry).await {
-        error!("failed to save rootfs on disconnect: {e}");
+    if let Some(vm_entry) = vm_entry {
+        save_vm_rootfs_on_disconnect(state, user_id, vm_entry).await?;
     }
+    Ok(())
 }
 
 async fn save_vm_rootfs_on_disconnect(
@@ -128,44 +130,35 @@ async fn run_ssh_relay(guest_ip: Ipv4Addr, state: &AppState, ws: WebSocket) -> R
     loop {
         tokio::select! {
             msg = ssh_channel.wait() => {
-                if !relay_ssh_to_ws(msg, &mut ws_sender).await { break; }
+                relay_ssh_to_ws(msg, &mut ws_sender).await?;
             }
             ws_msg = ws_rx.recv() => {
-                if !relay_ws_to_ssh(ws_msg, &mut ssh_channel, &mut ws_sender).await { break; }
+                relay_ws_to_ssh(ws_msg, &mut ssh_channel, &mut ws_sender).await?;
             }
             _ = keepalive.tick() => {
-                if !send_ws_keepalive(&mut ws_sender).await { break; }
+                send_ws_keepalive(&mut ws_sender).await?;
             }
         }
     }
-    Ok(())
 }
 
 async fn relay_ssh_to_ws(
     msg: Option<ChannelMsg>,
     ws_sender: &mut SplitSink<WebSocket, Message>,
-) -> bool {
+) -> Result<()> {
     match msg {
         Some(ChannelMsg::Data { ref data }) => {
-            match timeout(
+            timeout(
                 Duration::from_secs(SEND_TIMEOUT_SECS),
                 ws_sender.send(Message::Binary(Bytes::copy_from_slice(data))),
             )
             .await
-            {
-                Ok(Ok(())) => true,
-                Ok(Err(_)) => {
-                    info!("ws receiver dropped, ending relay");
-                    false
-                }
-                Err(_) => {
-                    error!("ws send timed out, consumer likely stuck");
-                    false
-                }
-            }
+            .context("ws send timed out, consumer likely stuck")?
+            .context("ws receiver dropped")?;
+            Ok(())
         }
-        Some(ChannelMsg::ExitStatus { .. }) | None => false,
-        _ => true,
+        Some(ChannelMsg::ExitStatus { .. }) | None => bail!("ssh channel closed"),
+        _ => Ok(()),
     }
 }
 
@@ -173,72 +166,48 @@ async fn relay_ws_to_ssh(
     msg: Option<Result<Message, AxumError>>,
     ssh_channel: &mut Channel<Msg>,
     ws_sender: &mut SplitSink<WebSocket, Message>,
-) -> bool {
+) -> Result<()> {
     match msg {
         Some(Ok(Message::Binary(data))) => {
-            match timeout(
+            timeout(
                 Duration::from_secs(SEND_TIMEOUT_SECS),
                 ssh_channel.data(&data[..]),
             )
             .await
-            {
-                Ok(Ok(())) => true,
-                Ok(Err(_)) => {
-                    info!("ssh channel closed, ending relay");
-                    false
-                }
-                Err(_) => {
-                    error!("ssh channel send timed out, consumer likely stuck");
-                    false
-                }
-            }
+            .context("ssh channel send timed out, consumer likely stuck")?
+            .context("ssh channel closed")?;
+            Ok(())
         }
         Some(Ok(Message::Text(text))) => {
-            if let Err(e) = handle_resize_message(ssh_channel, &text).await {
-                warn!("handle_resize_message failed: {e}");
+            if let Err(_) = handle_resize_message(ssh_channel, &text).await {
+                warn!("handle_resize_message failed");
             }
-            true
+            Ok(())
         }
         Some(Ok(Message::Ping(data))) => {
-            match timeout(
+            timeout(
                 Duration::from_secs(SEND_TIMEOUT_SECS),
                 ws_sender.send(Message::Pong(data)),
             )
             .await
-            {
-                Ok(Ok(())) => true,
-                Ok(Err(_)) => {
-                    info!("ws receiver dropped during pong, ending relay");
-                    false
-                }
-                Err(_) => {
-                    error!("ws pong send timed out, consumer likely stuck");
-                    false
-                }
-            }
+            .context("ws pong send timed out, consumer likely stuck")?
+            .context("ws receiver dropped during pong")?;
+            Ok(())
         }
-        Some(Ok(Message::Pong(_))) => true,
-        _ => false,
+        Some(Ok(Message::Pong(_))) => Ok(()),
+        _ => bail!("ws connection closed"),
     }
 }
 
-async fn send_ws_keepalive(ws_sender: &mut SplitSink<WebSocket, Message>) -> bool {
-    match timeout(
+async fn send_ws_keepalive(ws_sender: &mut SplitSink<WebSocket, Message>) -> Result<()> {
+    timeout(
         Duration::from_secs(SEND_TIMEOUT_SECS),
         ws_sender.send(Message::Ping(Bytes::new())),
     )
     .await
-    {
-        Ok(Ok(())) => true,
-        Ok(Err(_)) => {
-            info!("ws receiver dropped during keepalive, ending relay");
-            false
-        }
-        Err(_) => {
-            error!("ws keepalive send timed out, consumer likely stuck");
-            false
-        }
-    }
+    .context("ws keepalive send timed out, consumer likely stuck")?
+    .context("ws receiver dropped during keepalive")?;
+    Ok(())
 }
 
 async fn handle_resize_message(ssh_channel: &mut Channel<Msg>, text: &str) -> Result<()> {
