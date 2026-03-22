@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { Terminal as TerminalIcon } from "lucide-react";
 import type { ITerminalOptions } from "@xterm/xterm";
 import { Terminal as XTerm } from "@xterm/xterm";
@@ -22,7 +22,12 @@ function buildWsUrl(): string {
   return `${wsProto}//${window.location.host}/ws`;
 }
 
-export default function Terminal({ visible }: { visible: boolean }) {
+export interface TerminalHandle {
+  focus(): void;
+}
+
+const Terminal = React.forwardRef<TerminalHandle, { visible: boolean }>(
+  function Terminal({ visible }, ref) {
   const { vmId, resetVmId } = useSse();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
@@ -35,6 +40,12 @@ export default function Terminal({ visible }: { visible: boolean }) {
   const dataDisposableRef = useRef<{ dispose(): void } | null>(null);
   // Track consecutive connection failures (open never fires before close)
   const consecutiveFailRef = useRef(0);
+
+  useImperativeHandle(ref, () => ({
+    focus() {
+      termRef.current?.focus();
+    },
+  }));
 
   // Reconnect state
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -219,4 +230,6 @@ export default function Terminal({ visible }: { visible: boolean }) {
       />
     </div>
   );
-}
+});
+
+export default Terminal;
