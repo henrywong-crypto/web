@@ -54,9 +54,16 @@ pub(crate) async fn get_csrf_token_handler(
     _user: User,
     session: Session,
 ) -> Result<Response, AppError> {
-    // Fetch or create a CSRF token to return to the frontend
     let csrf_token = get_csrf_token(&session).await?;
     Ok(Json(CsrfTokenResponse { csrf_token }).into_response())
+}
+
+fn is_user_provisioning(state: &AppState, user_id: Uuid) -> Result<bool, AppError> {
+    let provisioning = state
+        .provisioning_users
+        .lock()
+        .map_err(|_| anyhow!("provisioning lock poisoned"))?;
+    Ok(provisioning.contains(&user_id))
 }
 
 fn register_vm(vms: &VmRegistry, vm_id: String, vm_entry: VmEntry) -> Result<(), AppError> {
@@ -67,9 +74,6 @@ fn register_vm(vms: &VmRegistry, vm_id: String, vm_entry: VmEntry) -> Result<(),
     Ok(())
 }
 
-/// Axum extractor that authenticates the user and resolves their VM.
-/// Looks up an existing VM or provisions a new one, returning the user ID,
-/// VM ID, and guest IP for the handler.
 pub(crate) struct UserVm {
     pub(crate) user_id: Uuid,
     pub(crate) vm_id: String,
@@ -83,15 +87,13 @@ impl FromRequestParts<AppState> for UserVm {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        // Step 1: Authenticate the user from the request
         let user = User::from_request_parts(parts, state)
             .await
             .map_err(IntoResponse::into_response)?;
-        // Step 2: Look up the user in the database, redirect to login if not found
         let db_user = get_user_by_email(&state.db, &user.email)
             .await
-            .map_err(|e| {
-                error!("db error: {e}");
+            .map_err(|_| {
+                error!("db error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "An internal error occurred",
@@ -99,9 +101,8 @@ impl FromRequestParts<AppState> for UserVm {
                     .into_response()
             })?
             .ok_or_else(|| Redirect::to("/login").into_response())?;
-        // Step 3: Find an existing VM for the user, or provision a new one
-        let (vm_id, guest_ip) = match find_user_vm(&state.vms, db_user.id).map_err(|e| {
-            error!("vm registry error: {e}");
+        let (vm_id, guest_ip) = match find_user_vm(&state.vms, db_user.id).map_err(|_| {
+            error!("vm registry error");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "An internal error occurred",
@@ -110,29 +111,26 @@ impl FromRequestParts<AppState> for UserVm {
         })? {
             Some(entry) => entry,
             None => {
-                // If already being provisioned by vm_status_handler, return 503
-                // so the frontend can retry after the VM is ready.
-                {
-                    let provisioning = state.provisioning_users.lock().map_err(|_| {
-                        (
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            "An internal error occurred",
-                        )
-                            .into_response()
-                    })?;
-                    if provisioning.contains(&db_user.id) {
-                        return Err((
-                            StatusCode::SERVICE_UNAVAILABLE,
-                            "VM is still starting, please try again",
-                        )
-                            .into_response());
-                    }
+                if is_user_provisioning(state, db_user.id).map_err(|_| {
+                    error!("provisioning check error");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "An internal error occurred",
+                    )
+                        .into_response()
+                })? {
+                    return Err((
+                        StatusCode::SERVICE_UNAVAILABLE,
+                        "VM is still starting, please try again",
+                    )
+                        .into_response());
                 }
                 let user_vm = provision_new_vm(state, db_user.id)
                     .await
                     .map_err(IntoResponse::into_response)?;
-                // Write settings to the freshly provisioned VM
-                write_initial_settings(parts, state, user_vm.guest_ip).await;
+                if let Err(_) = write_initial_settings(parts, state, user_vm.guest_ip).await {
+                    error!("failed to write initial settings");
+                }
                 return Ok(user_vm);
             }
         };
@@ -144,40 +142,26 @@ impl FromRequestParts<AppState> for UserVm {
     }
 }
 
-/// Best-effort write of initial settings to a freshly provisioned VM.
-/// If a gateway API key is available in the session, writes API key settings.
-/// Otherwise, if using Bedrock/IAM mode, writes Bedrock default settings so the
-/// VM has the correct model IDs from the server config (not baked into the rootfs).
-async fn write_initial_settings(parts: &mut Parts, state: &AppState, guest_ip: Ipv4Addr) {
-    let session = match Session::from_request_parts(parts, state).await {
-        Ok(s) => s,
-        Err(_) => {
-            write_bedrock_settings(state, guest_ip).await;
-            return;
-        }
+async fn write_initial_settings(parts: &mut Parts, state: &AppState, guest_ip: Ipv4Addr) -> Result<()> {
+    let session = Session::from_request_parts(parts, state).await.ok();
+    let gateway_key = match &session {
+        Some(s) => s.get::<String>("gateway_api_key").await.ok().flatten(),
+        None => None,
     };
-    let gateway_key = match session.get::<String>("gateway_api_key").await {
-        Ok(Some(key)) => key,
-        _ => {
-            write_bedrock_settings(state, guest_ip).await;
-            return;
-        }
+
+    let content = match gateway_key {
+        Some(key) => chat_settings::build_api_key_settings_json(
+            &key,
+            state.config.anthropic_base_url.as_deref(),
+            &state.config.anthropic_default_haiku_model,
+            &state.config.anthropic_default_sonnet_model,
+            &state.config.anthropic_default_opus_model,
+            state.config.enable_mcp,
+        )?,
+        None => return write_bedrock_settings(state, guest_ip).await,
     };
-    let content = match chat_settings::build_api_key_settings_json(
-        &gateway_key,
-        state.config.anthropic_base_url.as_deref(),
-        &state.config.anthropic_default_haiku_model,
-        &state.config.anthropic_default_sonnet_model,
-        &state.config.anthropic_default_opus_model,
-        state.config.enable_mcp,
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            error!("failed to build gateway settings: {e}");
-            return;
-        }
-    };
-    if let Err(e) = chat_settings::set_vm_settings(
+
+    chat_settings::set_vm_settings(
         guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
@@ -185,29 +169,18 @@ async fn write_initial_settings(parts: &mut Parts, state: &AppState, guest_ip: I
         &content,
     )
     .await
-    {
-        error!("failed to write gateway settings to VM: {e}");
-    }
 }
 
-/// Best-effort write of gateway API key settings to a VM using a pre-extracted key.
-/// Used by the background provisioning path where session is not available.
-async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, gateway_key: &str) {
-    let content = match chat_settings::build_api_key_settings_json(
+async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, gateway_key: &str) -> Result<()> {
+    let content = chat_settings::build_api_key_settings_json(
         gateway_key,
         state.config.anthropic_base_url.as_deref(),
         &state.config.anthropic_default_haiku_model,
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
         state.config.enable_mcp,
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            error!("failed to build gateway settings: {e}");
-            return;
-        }
-    };
-    if let Err(e) = chat_settings::set_vm_settings(
+    )?;
+    chat_settings::set_vm_settings(
         guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
@@ -215,30 +188,18 @@ async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, g
         &content,
     )
     .await
-    {
-        error!("failed to write gateway settings to VM: {e}");
-    }
 }
 
-/// Best-effort write of Bedrock default settings to a VM.
-/// Only writes when running in IAM/Bedrock mode so the VM gets the correct
-/// model IDs from the server config rather than relying on a baked-in rootfs.
-async fn write_bedrock_settings(state: &AppState, guest_ip: Ipv4Addr) {
+async fn write_bedrock_settings(state: &AppState, guest_ip: Ipv4Addr) -> Result<()> {
     if !state.config.use_iam_creds {
-        return;
+        return Ok(());
     }
-    let content = match chat_settings::build_bedrock_settings_json(
+    let content = chat_settings::build_bedrock_settings_json(
         &state.config.anthropic_default_haiku_model,
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            error!("failed to build bedrock settings: {e}");
-            return;
-        }
-    };
-    if let Err(e) = chat_settings::set_vm_settings(
+    )?;
+    chat_settings::set_vm_settings(
         guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
@@ -246,9 +207,6 @@ async fn write_bedrock_settings(state: &AppState, guest_ip: Ipv4Addr) {
         &content,
     )
     .await
-    {
-        error!("failed to write bedrock settings to VM: {e}");
-    }
 }
 
 fn remove_user_vm(vms: &VmRegistry, user_id: Uuid) -> Result<()> {
@@ -279,7 +237,6 @@ pub(crate) async fn get_or_create_terminal(
     };
     let has_user_rootfs = find_user_rootfs(&state.config.user_rootfs_dir, db_user.id).is_some();
     let csrf_token = get_csrf_token(&session).await?;
-    // Serve the page immediately with vm_id="" — the frontend will poll /api/vm-status
     Ok(Html(render_terminal_page(
         "",
         &csrf_token,
@@ -287,15 +244,6 @@ pub(crate) async fn get_or_create_terminal(
         has_user_rootfs,
     ))
     .into_response())
-}
-
-#[derive(Serialize)]
-struct VmStatusResponse {
-    status: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    vm_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    has_user_rootfs: Option<bool>,
 }
 
 pub(crate) async fn vm_status_handler(
@@ -308,88 +256,49 @@ pub(crate) async fn vm_status_handler(
     };
     let user_id = db_user.id;
 
-    // Check if VM already exists
     if let Some((vm_id, _guest_ip)) = find_user_vm(&state.vms, user_id)? {
         let has_user_rootfs =
             find_user_rootfs(&state.config.user_rootfs_dir, user_id).is_some();
-        return Ok(Json(VmStatusResponse {
-            status: "ready",
-            vm_id: Some(vm_id),
-            has_user_rootfs: Some(has_user_rootfs),
-        })
+        return Ok(Json(serde_json::json!({
+            "status": "ready",
+            "vm_id": vm_id,
+            "has_user_rootfs": has_user_rootfs,
+        }))
         .into_response());
     }
 
-    // Check if already provisioning
-    {
-        let provisioning = state
-            .provisioning_users
-            .lock()
-            .map_err(|_| anyhow!("provisioning lock poisoned"))?;
-        if provisioning.contains(&user_id) {
-            return Ok(Json(VmStatusResponse {
-                status: "provisioning",
-                vm_id: None,
-                has_user_rootfs: None,
-            })
-            .into_response());
-        }
+    if is_user_provisioning(&state, user_id)? {
+        return Ok(Json(serde_json::json!({"status": "provisioning"})).into_response());
     }
 
-    // Extract gateway key from session before spawning background task
     let gateway_key = session
         .get::<String>("gateway_api_key")
         .await
         .ok()
         .flatten();
 
-    // Spawn provisioning in background
     let state_clone = state.clone();
     tokio::spawn(async move {
         match provision_new_vm(&state_clone, user_id).await {
             Ok(user_vm) => {
-                // Write gateway settings if available, otherwise write bedrock defaults
-                if let Some(key) = gateway_key {
-                    write_gateway_settings_with_key(&state_clone, user_vm.guest_ip, &key).await;
+                let result = if let Some(key) = gateway_key {
+                    write_gateway_settings_with_key(&state_clone, user_vm.guest_ip, &key).await
                 } else {
-                    write_bedrock_settings(&state_clone, user_vm.guest_ip).await;
+                    write_bedrock_settings(&state_clone, user_vm.guest_ip).await
+                };
+                if let Err(_) = result {
+                    error!("failed to write settings to VM");
                 }
             }
-            Err(e) => {
-                error!("background vm provisioning failed for {user_id}: {}", e.0);
+            Err(_) => {
+                error!("background vm provisioning failed for {user_id}");
             }
         }
     });
 
-    Ok(Json(VmStatusResponse {
-        status: "provisioning",
-        vm_id: None,
-        has_user_rootfs: None,
-    })
-    .into_response())
+    Ok(Json(serde_json::json!({"status": "provisioning"})).into_response())
 }
 
-/// Atomically reserves a provisioning slot for a user by locking both `vms` and
-/// `provisioning_users`, checking three conditions, then inserting `user_id` into
-/// the provisioning set. Both mutex guards are local variables — they drop when
-/// this function returns, so no mutex is held across the subsequent async work in
-/// `provision_new_vm`. The returned `ProvisioningGuard` holds only an `Arc` to
-/// the provisioning set (not a lock guard); its `Drop` impl briefly re-acquires
-/// the provisioning mutex to remove the user_id once provisioning completes or fails.
-///
-/// Checks performed while both locks are held:
-/// 1. User does not already have a running VM in the registry.
-/// 2. User does not already have an in-flight provision (duplicate insert returns false).
-/// 3. Total slots (running VMs + in-flight provisions) does not exceed `vm_max_count`.
-///
-/// No deadlock: this is the only site that holds both mutexes, and it always
-/// acquires them in the same order (vms → provisioning_users). Every other site
-/// in the codebase acquires at most one of the two.
-///
-/// No blocking between different users: the locks are held only for in-memory
-/// checks (microseconds). If User B calls this while User A's locks are held,
-/// User B waits only for the mutex (microseconds), then acquires the locks,
-/// passes the checks, and proceeds to provision concurrently alongside User A.
 fn acquire_provisioning_slot(
     state: &AppState,
     user_id: Uuid,
@@ -408,10 +317,6 @@ fn acquire_provisioning_slot(
     if !provisioning.insert(user_id) {
         return Err(anyhow!("VM provisioning already in progress for user").into());
     }
-    // In-flight provisions count as reserved slots so concurrent callers cannot
-    // overshoot vm_max_count. For example, with 18 running VMs and max 20:
-    // User A inserts → 18 + 1 = 19 ≤ 20 ✓, User B inserts → 18 + 2 = 20 ≤ 20 ✓,
-    // User C inserts → 18 + 3 = 21 > 20 ✗ (removed and rejected).
     if registry.len() + provisioning.len() > state.config.vm_max_count {
         provisioning.remove(&user_id);
         return Err(anyhow!("vm limit reached").into());
@@ -422,9 +327,6 @@ fn acquire_provisioning_slot(
     })
 }
 
-/// RAII guard that removes the user from the provisioning set on drop. Holds an
-/// `Arc` to the set — not a lock guard — so no mutex is held while this lives.
-/// On drop it briefly acquires the provisioning mutex to remove the user_id.
 struct ProvisioningGuard {
     provisioning_users: Arc<Mutex<HashSet<Uuid>>>,
     user_id: Uuid,
@@ -439,10 +341,6 @@ impl Drop for ProvisioningGuard {
 }
 
 pub(crate) async fn provision_new_vm(state: &AppState, user_id: Uuid) -> Result<UserVm, AppError> {
-    // acquire_provisioning_slot locks vms + provisioning_users, performs all
-    // checks, inserts user_id into the provisioning set, then drops both locks
-    // before returning. The _guard keeps user_id in the set for the duration of
-    // this function; its Drop impl removes it (on success or error).
     let _guard = acquire_provisioning_slot(state, user_id)?;
     info!("building vm config");
     let user_rootfs = ensure_user_rootfs(
@@ -487,7 +385,6 @@ async fn build_terminal_response(
     user_id: Uuid,
     vm_id: &str,
 ) -> Result<Response, AppError> {
-    // Embed a CSRF token in the rendered terminal page
     let csrf_token = get_csrf_token(session).await?;
     let has_user_rootfs = find_user_rootfs(&state.config.user_rootfs_dir, user_id).is_some();
     Ok(Html(render_terminal_page(
@@ -683,7 +580,7 @@ async fn write_chat_file_via_sftp(
     )
     .await
     .context("sftp create timed out")?
-    .map_err(|e| anyhow!("sftp create: {e}"))?;
+    .map_err(|_| anyhow!("sftp create failed"))?;
     timeout(
         Duration::from_secs(SFTP_OP_TIMEOUT_SECS),
         tokio::io::copy(reader, &mut file),
@@ -694,6 +591,6 @@ async fn write_chat_file_via_sftp(
     timeout(Duration::from_secs(SFTP_OP_TIMEOUT_SECS), file.shutdown())
         .await
         .context("sftp shutdown timed out")?
-        .map_err(|e| anyhow!("sftp shutdown: {e}"))?;
+        .map_err(|_| anyhow!("sftp shutdown failed"))?;
     Ok(())
 }
