@@ -319,9 +319,11 @@ def install_agent(rootfs: Path, mcp_base_url: str | None = None) -> None:
             sys.exit(f"error: invalid hostname in --mcp-base-url: {host!r}")
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
         if parsed.scheme == "https":
-            # verify=1 ensures socat validates the upstream TLS certificate.
-            # If using a self-signed cert, add cafile= to point to the CA bundle.
-            upstream = f"OPENSSL:{host}:{port},verify=1"
+            # verify=0 disables TLS certificate validation. This is required
+            # because the upstream MCP server uses an internal/self-signed cert.
+            # TODO: Switch to verify=1 with a cafile= once the upstream provides
+            # a valid certificate or we bundle the internal CA.
+            upstream = f"OPENSSL:{host}:{port},verify=0"
         else:
             upstream = f"TCP:{host}:{port}"
         service_text = f"""\
