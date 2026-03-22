@@ -230,7 +230,12 @@ fn spawn_idle_vm_sweep_task(app_state: AppState) -> tokio::task::JoinHandle<()> 
         interval.tick().await;
         loop {
             interval.tick().await;
-            sweep_idle_vms(&app_state.vms).await;
+            sweep_idle_vms(
+                &app_state.vms,
+                &app_state.config.user_rootfs_dir,
+                &app_state.rootfs_lock,
+            )
+            .await;
         }
     })
 }
