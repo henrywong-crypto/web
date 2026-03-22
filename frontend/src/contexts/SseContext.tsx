@@ -21,8 +21,6 @@ import { useQuestionStorage } from "../hooks/useQuestionStorage";
 interface SseContextValue {
   vmId: string;
   vmReady: boolean;
-  /** Current CSRF token (rotated automatically on mutating requests). */
-  csrfToken: string;
   /** Fetch wrapper that auto-attaches and rotates the CSRF token for mutating requests. */
   csrfFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   uploadDir: string;
@@ -376,7 +374,6 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       value={{
         vmId,
         vmReady,
-        csrfToken,
         csrfFetch,
         uploadDir,
         uploadAction,
