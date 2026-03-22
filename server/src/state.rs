@@ -64,6 +64,8 @@ pub(crate) struct AppConfig {
     #[serde(default)]
     pub(crate) gateway_api_url: String,
     #[serde(default)]
+    pub(crate) gateway_tls_accept_invalid_certs: bool,
+    #[serde(default)]
     pub(crate) gateway_identity_provider: String,
     #[serde(default = "default_user_rootfs_dir")]
     pub(crate) user_rootfs_dir: PathBuf,

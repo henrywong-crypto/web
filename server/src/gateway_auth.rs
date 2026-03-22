@@ -93,10 +93,12 @@ pub(crate) async fn exchange_gateway_code(
 pub(crate) async fn provision_gateway_api_key(
     access_token: &str,
     gateway_api_url: &str,
+    accept_invalid_certs: bool,
 ) -> Result<String> {
     let url = format!("{}/api/v1/api-key", gateway_api_url);
 
     let client = reqwest::Client::builder()
+        .danger_accept_invalid_certs(accept_invalid_certs)
         .build()
         .context("failed to build HTTP client")?;
     let resp = client

@@ -34,7 +34,7 @@ test.describe("conversation history load on boot", () => {
     });
 
     // Route WS so terminal doesn't error
-    await page.routeWebSocket(/\/ws$/, () => {});
+    await page.routeWebSocket(/\/ws\b/, () => {});
 
     // Set up with existing server sessions but vmId="" (cold boot)
     await setupApp(page, {
@@ -88,7 +88,7 @@ test.describe("conversation history load on boot", () => {
     });
 
     // Route WS so terminal doesn't error
-    await page.routeWebSocket(/\/ws$/, () => {});
+    await page.routeWebSocket(/\/ws\b/, () => {});
 
     // Pre-seed localStorage with conversations keyed by the real vmId
     // (simulates a previous session that saved conversations before reboot).

@@ -57,7 +57,12 @@ pub(crate) async fn gateway_callback_handler(
     let access_token = exchange_gateway_code(&query.code, &pkce_verifier, &state.config).await?;
 
     // Provision API key
-    let api_key = provision_gateway_api_key(&access_token, &state.config.gateway_api_url).await?;
+    let api_key = provision_gateway_api_key(
+        &access_token,
+        &state.config.gateway_api_url,
+        state.config.gateway_tls_accept_invalid_certs,
+    )
+    .await?;
 
     info!("gateway API key provisioned successfully");
 
