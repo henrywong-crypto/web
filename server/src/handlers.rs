@@ -169,7 +169,6 @@ async fn write_initial_settings(parts: &mut Parts, state: &AppState, guest_ip: I
         &state.config.anthropic_default_haiku_model,
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
-        None,
         state.config.enable_mcp,
     ) {
         Ok(c) => c,
@@ -200,7 +199,6 @@ async fn write_gateway_settings_with_key(state: &AppState, guest_ip: Ipv4Addr, g
         &state.config.anthropic_default_haiku_model,
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
-        None,
         state.config.enable_mcp,
     ) {
         Ok(c) => c,

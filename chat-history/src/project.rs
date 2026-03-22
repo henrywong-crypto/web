@@ -10,7 +10,6 @@ pub(crate) async fn find_all_project_dirs(
     ssh_user_home: &Path,
 ) -> Result<Vec<PathBuf>> {
     let projects_base = build_projects_base_path(ssh_user_home);
-    // Directory may not exist yet on a fresh VM; treat as empty rather than an error
     let top_entries: Vec<DirEntry> = sftp
         .read_dir(
             projects_base
@@ -18,8 +17,8 @@ pub(crate) async fn find_all_project_dirs(
                 .context("path is not valid UTF-8")?,
         )
         .await
-        .map(|entries| entries.collect())
-        .unwrap_or_default();
+        .context("failed to read projects directory")?
+        .collect();
     let mut project_dirs = Vec::new();
     for entry in top_entries {
         let name = entry.file_name();

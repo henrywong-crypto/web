@@ -32,11 +32,10 @@ pub(crate) async fn gateway_callback_handler(
 ) -> Result<Response, AppError> {
     // Validate state nonce
     let stored_state = session
-        .get::<String>("gateway_oauth_state")
+        .remove::<String>("gateway_oauth_state")
         .await
         .ok()
         .flatten();
-    let _ = session.remove::<String>("gateway_oauth_state").await;
 
     if stored_state.as_deref() != Some(&query.state) {
         error!("gateway oauth state mismatch");
@@ -47,9 +46,8 @@ pub(crate) async fn gateway_callback_handler(
     let pkce_verifier = session
         .remove::<String>("gateway_oauth_pkce_verifier")
         .await
-        .ok()
-        .flatten()
-        .unwrap_or_default();
+        .map_err(|e| anyhow::anyhow!("failed to retrieve PKCE verifier from session: {e}"))?
+        .context("PKCE verifier missing from session")?;
 
     // Remove stored nonce (validated implicitly via the token exchange)
     let _ = session.remove::<String>("gateway_oauth_nonce").await;
@@ -84,7 +82,6 @@ pub(crate) async fn gateway_callback_handler(
         &state.config.anthropic_default_haiku_model,
         &state.config.anthropic_default_sonnet_model,
         &state.config.anthropic_default_opus_model,
-        None,
         state.config.enable_mcp,
     )?;
 

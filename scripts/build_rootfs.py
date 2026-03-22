@@ -266,7 +266,25 @@ def install_claude_code(rootfs: Path) -> None:
 def install_agent(rootfs: Path, mcp_base_url: str | None = None) -> None:
     opt = rootfs / "opt"
     opt.mkdir(exist_ok=True)
-    shutil.copy(str(AGENT_PY), str(opt / "agent.py"))
+    agent_dest = opt / "agent.py"
+    shutil.copy(str(AGENT_PY), str(agent_dest))
+
+    # Patch MCP_SERVERS in agent.py when an MCP base URL is configured so the
+    # agent knows to connect to the socat proxy baked into the image.
+    if mcp_base_url:
+        MCP_SERVERS_VALUE = (
+            '{\n    "gemini-websearch": {\n'
+            '        "type": "http",\n'
+            '        "url": f"http://localhost:{MCP_PROXY_PORT}/mcp",\n'
+            "    },\n}"
+        )
+        agent_text = agent_dest.read_text()
+        agent_text = agent_text.replace(
+            "MCP_SERVERS: dict = {}",
+            f"MCP_SERVERS: dict = {MCP_SERVERS_VALUE}",
+        )
+        agent_dest.write_text(agent_text)
+
     run(["chown", "-R", "1000:1000", str(opt)])
 
     # Install and enable the agent systemd service so agent.py starts on boot.

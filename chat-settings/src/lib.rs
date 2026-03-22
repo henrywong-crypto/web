@@ -22,7 +22,6 @@ pub fn build_api_key_settings_json(
     haiku_model: &str,
     sonnet_model: &str,
     opus_model: &str,
-    model: Option<&str>,
     enable_mcp: bool,
 ) -> Result<String> {
     let mut env = serde_json::json!({
@@ -40,9 +39,6 @@ pub fn build_api_key_settings_json(
         "env": env,
         "skipWebFetchPreflight": true,
     });
-    if let Some(m) = model {
-        settings["model"] = serde_json::Value::String(m.to_string());
-    }
     if enable_mcp {
         settings["mcpServers"] = serde_json::json!({
             "gemini-websearch": {

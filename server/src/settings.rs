@@ -92,7 +92,6 @@ pub(crate) async fn put_settings_handler(
             &state.config.anthropic_default_haiku_model,
             &state.config.anthropic_default_sonnet_model,
             &state.config.anthropic_default_opus_model,
-            body.model.as_deref(),
             state.config.enable_mcp,
         )?;
         set_vm_settings(

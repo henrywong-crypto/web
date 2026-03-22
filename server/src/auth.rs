@@ -25,8 +25,8 @@ impl<S: Send + Sync> FromRequestParts<S> for User {
         let session = Session::from_request_parts(parts, state)
             .await
             .map_err(|session_error| session_error.into_response())?;
-        let email = session.get::<String>("email").await.map_err(|e| {
-            error!("session lookup failed: {e}");
+        let email = session.get::<String>("email").await.map_err(|_| {
+            error!("session lookup failed");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "An internal error occurred",
@@ -72,11 +72,11 @@ pub(crate) async fn get_callback_handler(
     let email = session
         .get::<String>("email")
         .await
-        .map_err(|e| anyhow::anyhow!("session lookup failed: {e}"))?;
+        .map_err(|_| anyhow::anyhow!("session lookup failed"))?;
     if let Some(email) = email
         && let Err(e) = upsert_user(&state.db, &email).await
     {
-        return Err(anyhow::anyhow!("upsert_user failed: {e}").into());
+        return Err(anyhow::anyhow!("upsert_user failed").into());
     }
 
     // If gateway federation is configured, redirect to gateway Cognito for
@@ -97,6 +97,6 @@ pub(crate) async fn get_logout_handler(session: Session) -> Result<Response, App
     session
         .delete()
         .await
-        .map_err(|e| anyhow::anyhow!("session delete failed during logout: {e}"))?;
+        .map_err(|_| anyhow::anyhow!("session delete failed during logout"))?;
     Ok(Redirect::to("/login").into_response())
 }

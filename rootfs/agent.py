@@ -15,12 +15,8 @@ from typing import Any
 SOCKET_PATH = "/tmp/agent.sock"
 QUESTION_TIMEOUT_SECS = 3600
 MCP_PROXY_PORT = 8443
-MCP_SERVERS = {
-    "gemini-websearch": {
-        "type": "http",
-        "url": f"http://localhost:{MCP_PROXY_PORT}/mcp",
-    },
-}
+# Replaced by build_rootfs.py when --mcp-base-url is provided.
+MCP_SERVERS: dict = {}
 
 # Allowed root directories for work_dir. Populated at startup via _init_allowed_roots().
 _ALLOWED_WORK_DIR_ROOTS: list[str] = []

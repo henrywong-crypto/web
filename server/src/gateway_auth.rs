@@ -5,12 +5,10 @@ use axum::{
     extract::State,
     response::{IntoResponse, Response},
 };
-use chat_settings::{build_api_key_settings_json, get_vm_settings, set_vm_settings};
+use chat_settings::{build_api_key_settings_json, set_vm_settings};
 use serde::Deserialize;
 use token::TokenRequestBuilder;
 use tower_sessions::Session;
-use tracing::warn;
-
 use crate::{
     handlers::UserVm,
     state::{AppConfig, AppError, AppState},
@@ -105,7 +103,7 @@ pub(crate) async fn provision_gateway_api_key(
         .context("failed to call gateway api-keys endpoint")?;
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+        let body = resp.text().await.context("failed to read gateway error response body")?;
         anyhow::bail!("gateway api-keys endpoint returned {status}: {body}");
     }
 
@@ -129,11 +127,45 @@ pub(crate) fn is_gateway_configured(config: &AppConfig) -> bool {
         && !config.gateway_identity_provider.is_empty()
 }
 
+/// Provisions a new gateway API key and writes settings to the VM.
+async fn provision_and_write_settings(
+    access_token: &str,
+    config: &AppConfig,
+    user_vm: &UserVm,
+) -> Result<String> {
+    let api_key = provision_gateway_api_key(access_token, &config.gateway_api_url).await?;
+    let content = build_api_key_settings_json(
+        &api_key,
+        config.anthropic_base_url.as_deref(),
+        &config.anthropic_default_haiku_model,
+        &config.anthropic_default_sonnet_model,
+        &config.anthropic_default_opus_model,
+        config.enable_mcp,
+    )?;
+    set_vm_settings(
+        user_vm.guest_ip,
+        &config.ssh_key_path,
+        &config.ssh_user,
+        &config.vm_host_key_path,
+        &content,
+    )
+    .await?;
+    Ok(api_key)
+}
+
+/// Stores the gateway API key in the session.
+async fn store_key_in_session(session: &Session, api_key: &str) -> Result<()> {
+    session
+        .insert("gateway_api_key", api_key)
+        .await
+        .map_err(|e| anyhow::anyhow!("failed to store gateway_api_key in session: {e}"))
+}
+
 /// POST /api/renew-gateway-key
 ///
 /// Renews the user's gateway API key. If a gateway access token is stored in
-/// session, reuse it to provision a new key with `force_new=true`. Otherwise,
-/// redirect through the gateway OAuth flow.
+/// session, reuse it to provision a new key. Otherwise, redirect through the
+/// gateway OAuth flow.
 pub(crate) async fn renew_gateway_key_handler(
     user_vm: UserVm,
     session: Session,
@@ -143,60 +175,24 @@ pub(crate) async fn renew_gateway_key_handler(
         return Ok((axum::http::StatusCode::BAD_REQUEST, "Gateway not configured").into_response());
     }
 
-    // Try to reuse stored gateway access token
-    if let Some(access_token) = session
+    let access_token = session
         .get::<String>("gateway_access_token")
         .await
         .ok()
-        .flatten()
-    {
-        match provision_gateway_api_key(&access_token, &state.config.gateway_api_url).await {
-            Ok(api_key) => {
-                // Preserve the user's existing model setting
-                let existing_model = get_vm_settings(
-                    user_vm.guest_ip,
-                    &state.config.ssh_key_path,
-                    &state.config.ssh_user,
-                    &state.config.vm_host_key_path,
-                )
-                .await
-                .ok()
-                .and_then(|s| s.model);
-                let content = build_api_key_settings_json(
-                    &api_key,
-                    state.config.anthropic_base_url.as_deref(),
-                    &state.config.anthropic_default_haiku_model,
-                    &state.config.anthropic_default_sonnet_model,
-                    &state.config.anthropic_default_opus_model,
-                    existing_model.as_deref(),
-                    state.config.enable_mcp,
-                )?;
-                set_vm_settings(
-                    user_vm.guest_ip,
-                    &state.config.ssh_key_path,
-                    &state.config.ssh_user,
-                    &state.config.vm_host_key_path,
-                    &content,
-                )
-                .await?;
-                // Store the new key in session for VM reset handling
-                session
-                    .insert("gateway_api_key", &api_key)
-                    .await
-                    .map_err(|e| {
-                        anyhow::anyhow!("failed to store gateway_api_key in session: {e}")
-                    })?;
-                return Ok(Json(serde_json::json!({"status": "ok"})).into_response());
-            }
-            Err(e) => {
-                warn!("stored gateway token expired or invalid, initiating re-auth: {e}");
-            }
+        .flatten();
+
+    match access_token {
+        Some(token) => {
+            let api_key =
+                provision_and_write_settings(&token, &state.config, &user_vm).await?;
+            store_key_in_session(&session, &api_key).await?;
+            Ok(Json(serde_json::json!({"status": "ok"})).into_response())
+        }
+        None => {
+            let authorize_url = initiate_gateway_login(&session, &state.config).await?;
+            Ok(Json(serde_json::json!({"redirect": authorize_url})).into_response())
         }
     }
-
-    // Token expired or missing — redirect through OAuth flow
-    let authorize_url = initiate_gateway_login(&session, &state.config).await?;
-    Ok(Json(serde_json::json!({"redirect": authorize_url})).into_response())
 }
 
 #[cfg(test)]
