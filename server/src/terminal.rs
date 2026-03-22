@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use axum::{
     Error as AxumError,
     extract::{
-        Path, State,
+        State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::{HeaderMap, StatusCode},
@@ -29,14 +29,10 @@ const SEND_TIMEOUT_SECS: u64 = 30;
 
 pub(crate) async fn handle_ws_upgrade(
     user_vm: UserVm,
-    Path(vm_id): Path<String>,
     headers: HeaderMap,
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    if user_vm.vm_id != vm_id {
-        return Ok((StatusCode::NOT_FOUND, "Session not found").into_response());
-    }
     // Validate Origin header to prevent cross-site WebSocket hijacking.
     // Browsers always send Origin on WebSocket upgrades; reject if it
     // doesn't match the Host header.

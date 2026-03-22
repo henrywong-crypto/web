@@ -132,7 +132,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
         .route("/api/csrf-token", get(get_csrf_token_handler))
         .route("/rootfs/delete", post(delete_user_rootfs_handler))
         .route("/terminal/{id}", get(get_terminal_page))
-        .route("/ws/{id}", get(handle_ws_upgrade))
+        .route("/ws", get(handle_ws_upgrade))
         .route("/login", get(get_login_handler))
         .route("/login/cognito", get(get_cognito_login_handler))
         .route("/logout", post(get_logout_handler))

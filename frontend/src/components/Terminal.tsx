@@ -17,9 +17,9 @@ const RECONNECT_MAX_MS = 30000;
 // Number of silent WS reconnect attempts before triggering VM re-provisioning.
 const MAX_RECONNECT_ATTEMPTS = 5;
 
-function buildWsUrl(vmId: string): string {
+function buildWsUrl(): string {
   const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${wsProto}//${window.location.host}/ws/${encodeURIComponent(vmId)}`;
+  return `${wsProto}//${window.location.host}/ws`;
 }
 
 export default function Terminal({ visible }: { visible: boolean }) {
@@ -111,17 +111,17 @@ export default function Terminal({ visible }: { visible: boolean }) {
     reconnectAttemptRef.current = attempt + 1;
     reconnectTimerRef.current = setTimeout(() => {
       if (unmountedRef.current) return;
-      const ws = new WebSocket(buildWsUrl(vmId));
+      const ws = new WebSocket(buildWsUrl());
       ws.binaryType = "arraybuffer";
       wireWs(ws);
     }, delay);
-  }, [vmId, wireWs, resetVmId]);
+  }, [wireWs, resetVmId]);
 
   // Open initial WS eagerly on mount
   useEffect(() => {
     if (!vmId) return;
     unmountedRef.current = false;
-    const ws = new WebSocket(buildWsUrl(vmId));
+    const ws = new WebSocket(buildWsUrl());
     ws.binaryType = "arraybuffer";
     wireWs(ws);
 
