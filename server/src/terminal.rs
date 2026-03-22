@@ -5,7 +5,7 @@ use axum::{
         Path, State,
         ws::{Message, WebSocket, WebSocketUpgrade},
     },
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
 };
 use bytes::Bytes;
@@ -29,11 +29,25 @@ const SEND_TIMEOUT_SECS: u64 = 30;
 pub(crate) async fn handle_ws_upgrade(
     user_vm: UserVm,
     Path(vm_id): Path<String>,
+    headers: HeaderMap,
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
     if user_vm.vm_id != vm_id {
         return Ok((StatusCode::NOT_FOUND, "Session not found").into_response());
+    }
+    // Validate Origin header to prevent cross-site WebSocket hijacking.
+    // Browsers always send Origin on WebSocket upgrades; reject if it
+    // doesn't match the Host header, or if Origin is present but Host is missing.
+    if let Some(origin) = headers.get("origin").and_then(|v| v.to_str().ok()) {
+        let origin_host = origin
+            .strip_prefix("https://")
+            .or_else(|| origin.strip_prefix("http://"))
+            .unwrap_or(origin);
+        match headers.get("host").and_then(|v| v.to_str().ok()) {
+            Some(host) if origin_host == host => {} // OK
+            _ => return Ok((StatusCode::FORBIDDEN, "Origin mismatch").into_response()),
+        }
     }
     Ok(ws.on_upgrade(move |socket| async move {
         run_terminal_session(

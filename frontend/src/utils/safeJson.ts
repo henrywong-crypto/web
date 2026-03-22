@@ -1,10 +1,10 @@
 /**
  * Safely parse JSON from localStorage without prototype pollution.
- * Strips __proto__ and constructor keys from the parsed object.
+ * Strips __proto__, constructor, and prototype keys from the parsed object.
  */
 export function safeJsonParse<T>(raw: string): T {
   return JSON.parse(raw, (key, value) => {
-    if (key === "__proto__" || key === "constructor") return undefined;
+    if (key === "__proto__" || key === "constructor" || key === "prototype") return undefined;
     return value;
   }) as T;
 }

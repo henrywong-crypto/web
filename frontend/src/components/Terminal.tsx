@@ -19,13 +19,13 @@ const RECONNECT_MAX_MS = 30000;
 // the original VM was swept for idleness.
 const MAX_RECONNECT_ATTEMPTS = 5;
 
-function buildWsUrl(vmId: string): string {
+function buildWsUrl(vmId: string, csrfToken: string): string {
   const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${wsProto}//${window.location.host}/ws/${encodeURIComponent(vmId)}`;
+  return `${wsProto}//${window.location.host}/ws/${encodeURIComponent(vmId)}?token=${encodeURIComponent(csrfToken)}`;
 }
 
 export default function Terminal({ visible }: { visible: boolean }) {
-  const { vmId } = useSse();
+  const { vmId, csrfToken } = useSse();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
@@ -109,17 +109,17 @@ export default function Terminal({ visible }: { visible: boolean }) {
     reconnectAttemptRef.current = attempt + 1;
     reconnectTimerRef.current = setTimeout(() => {
       if (unmountedRef.current) return;
-      const ws = new WebSocket(buildWsUrl(vmId));
+      const ws = new WebSocket(buildWsUrl(vmId, csrfToken));
       ws.binaryType = "arraybuffer";
       wireWs(ws);
     }, delay);
-  }, [vmId, wireWs]);
+  }, [vmId, csrfToken, wireWs]);
 
   // Open initial WS eagerly on mount
   useEffect(() => {
     if (!vmId) return;
     unmountedRef.current = false;
-    const ws = new WebSocket(buildWsUrl(vmId));
+    const ws = new WebSocket(buildWsUrl(vmId, csrfToken));
     ws.binaryType = "arraybuffer";
     wireWs(ws);
 
@@ -131,7 +131,7 @@ export default function Terminal({ visible }: { visible: boolean }) {
       wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [vmId, wireWs]);
+  }, [vmId, csrfToken, wireWs]);
 
   const attachXterm = useCallback(() => {
     if (xtermAttachedRef.current) return;

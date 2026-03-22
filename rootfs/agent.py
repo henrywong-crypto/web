@@ -183,7 +183,9 @@ def handle_interrupt(msg: dict) -> None:
 def handle_query(msg: dict, writer: asyncio.StreamWriter) -> None:
     """Spawn a new run_query task and register it in _sessions."""
     sdk_session_id = msg.get("session_id")  # non-None when resuming
-    task_id = msg.get("task_id") or str(uuid.uuid4())
+    # Always generate task_id server-side to prevent client-supplied IDs
+    # from cancelling other sessions (DoS).
+    task_id = str(uuid.uuid4())
     conversation_id = msg.get("conversation_id", "")
     work_dir = resolve_work_dir(msg.get("work_dir"))
     # Cancel any existing session with the same task_id to prevent orphaned tasks
@@ -258,7 +260,11 @@ async def main():
         os.unlink(SOCKET_PATH)
     except FileNotFoundError:
         pass
-    server = await asyncio.start_unix_server(handle_connection, path=SOCKET_PATH)
+    old_umask = os.umask(0o177)  # Create socket with 0o600 permissions
+    server = await asyncio.start_unix_server(
+        handle_connection, path=SOCKET_PATH, limit=1_048_576  # 1 MB max line length
+    )
+    os.umask(old_umask)
     loop = asyncio.get_running_loop()
 
     def remove_socket():
@@ -305,6 +311,9 @@ async def run_query(
     captured_session_id = sdk_session_id
 
     async def handle_tool_permission(tool_name, input_, context):
+        # Allow all tools unconditionally. This is safe because the agent runs
+        # inside an isolated Firecracker microVM — the VM itself is the security
+        # boundary, so no additional tool-level filtering is needed here.
         log(f"can_use_tool called  tool_name={tool_name!r}")
         return PermissionResultAllow()
 
@@ -391,7 +400,7 @@ async def run_query(
         for attr in ("stderr", "output", "returncode", "cmd", "exit_code"):
             if hasattr(exc, attr):
                 log(f"query error {attr}: {getattr(exc, attr)!r}")
-        emit_sse("error_event", {"message": str(exc)})
+        emit_sse("error_event", {"message": "An internal error occurred"})
     finally:
         log(f"query done  task_id={task_id!r}  session_id={captured_session_id!r}")
         emit_sse(

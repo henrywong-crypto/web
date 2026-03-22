@@ -2251,5 +2251,249 @@ class TestAskUserQuestionHook(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(session_ref[0].pending_question_data)
 
 
+# ── handle_connection cleanup tests ───────────────────────────────────────
+
+
+class _AsyncMockWriter(MockWriter):
+    """MockWriter extended with close() and wait_closed() tracking."""
+
+    def __init__(self, closing: bool = False):
+        super().__init__(closing)
+        self.close_called = False
+        self.wait_closed_called = False
+
+    def close(self):
+        self.close_called = True
+
+    async def wait_closed(self):
+        self.wait_closed_called = True
+
+
+class TestHandleConnection(unittest.IsolatedAsyncioTestCase):
+    """handle_connection calls writer.close() and writer.wait_closed() in all cases."""
+
+    async def test_cleanup_on_normal_route(self):
+        """writer.close() and writer.wait_closed() are called after normal completion."""
+        reader = asyncio.StreamReader()
+        reader.feed_eof()
+        writer = _AsyncMockWriter()
+        await agent.handle_connection(reader, writer)
+        self.assertTrue(writer.close_called)
+        self.assertTrue(writer.wait_closed_called)
+
+    async def test_cleanup_when_route_connection_raises(self):
+        """writer.close() and writer.wait_closed() are called even when route_connection raises."""
+        reader = asyncio.StreamReader()
+        reader.feed_eof()
+        writer = _AsyncMockWriter()
+        with unittest.mock.patch.object(
+            agent, "route_connection", side_effect=RuntimeError("boom")
+        ):
+            with self.assertRaises(RuntimeError):
+                await agent.handle_connection(reader, writer)
+        self.assertTrue(writer.close_called)
+        self.assertTrue(writer.wait_closed_called)
+
+    async def test_logs_connected_and_disconnected(self):
+        """handle_connection logs client connected / disconnected messages."""
+        reader = asyncio.StreamReader()
+        reader.feed_eof()
+        writer = _AsyncMockWriter()
+        with unittest.mock.patch.object(agent, "log") as mock_log:
+            await agent.handle_connection(reader, writer)
+        messages = [call.args[0] for call in mock_log.call_args_list]
+        self.assertTrue(
+            any("connected" in m for m in messages),
+            f"expected 'connected' log, got: {messages}",
+        )
+        self.assertTrue(
+            any("disconnected" in m for m in messages),
+            f"expected 'disconnected' log, got: {messages}",
+        )
+
+
+# ── _log_drain_error callback tests ──────────────────────────────────────
+
+
+class TestLogDrainError(unittest.IsolatedAsyncioTestCase):
+    """_log_drain_error logs only when the task ended with an exception."""
+
+    async def test_logs_when_task_has_exception(self):
+        async def fail():
+            raise ValueError("drain broke")
+
+        task = asyncio.create_task(fail())
+        try:
+            await task
+        except ValueError:
+            pass
+        with unittest.mock.patch.object(agent, "log") as mock_log:
+            agent._log_drain_error(task)
+        mock_log.assert_called_once()
+        self.assertIn("drain", mock_log.call_args[0][0])
+
+    async def test_does_nothing_when_task_is_cancelled(self):
+        async def wait():
+            await asyncio.sleep(999)
+
+        task = asyncio.create_task(wait())
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        with unittest.mock.patch.object(agent, "log") as mock_log:
+            agent._log_drain_error(task)
+        mock_log.assert_not_called()
+
+    async def test_does_nothing_when_task_completed_successfully(self):
+        async def succeed():
+            return 42
+
+        task = asyncio.create_task(succeed())
+        await task
+        with unittest.mock.patch.object(agent, "log") as mock_log:
+            agent._log_drain_error(task)
+        mock_log.assert_not_called()
+
+
+# ── ask_user_question_hook with non-dict tool_input ──────────────────────
+
+
+class TestAskUserQuestionHookNonDictInput(unittest.IsolatedAsyncioTestCase):
+    """When tool_input is not a dict, ask_user_question_hook falls back to [] for questions."""
+
+    async def _run_with_hook(self, task_id, writer, hook_caller):
+        """Same pattern as TestAskUserQuestionHook._run_with_hook."""
+
+        class HookMatcher:
+            def __init__(self, matcher, hooks, timeout):
+                self.matcher = matcher
+                self.hooks = hooks
+                self.timeout = timeout
+
+        class ClaudeAgentOptions:
+            def __init__(self, **kwargs):
+                self.hooks = kwargs.get("hooks", {})
+
+        caller = hook_caller
+
+        async def mock_query(prompt, options):
+            hook = None
+            for hm in options.hooks.get("PreToolUse", []):
+                if hm.matcher == "AskUserQuestion":
+                    hook = hm.hooks[0]
+            if hook is not None:
+                await caller(hook)
+            if False:
+                yield
+
+        mod = types.ModuleType("claude_agent_sdk")
+        types_mod = types.ModuleType("claude_agent_sdk.types")
+        mod.ClaudeAgentOptions = ClaudeAgentOptions
+        mod.PermissionResultAllow = object
+        mod.query = mock_query
+        types_mod.HookMatcher = HookMatcher
+        types_mod.StreamEvent = _StreamEvent
+
+        old_mods = {
+            k: sys.modules.get(k)
+            for k in ("claude_agent_sdk", "claude_agent_sdk.types")
+        }
+        sys.modules["claude_agent_sdk"] = mod
+        sys.modules["claude_agent_sdk.types"] = types_mod
+
+        agent._sessions[task_id] = agent.Session(
+            task=asyncio.current_task(), writer=writer, conversation_id=""
+        )
+        token1 = agent._emit_writer.set(writer)
+        token2 = agent._emit_session_id.set(task_id)
+        try:
+            await agent.run_query("test", None, task_id, "", "/root")
+        finally:
+            _restore_sdk_mock(old_mods)
+            agent._emit_writer.reset(token1)
+            agent._emit_session_id.reset(token2)
+            agent._sessions.pop(task_id, None)
+
+        return writer.written_events()
+
+    async def test_string_tool_input_falls_back_to_empty_questions(self):
+        """When tool_input is a string, questions should default to []."""
+        task_id = "aq-nondict-str"
+        writer = MockWriter()
+
+        async def call_hook(hook):
+            async def resolve():
+                agent.handle_answer_question(
+                    {"type": "answer_question", "request_id": "req-nd", "answers": {}}
+                )
+
+            asyncio.create_task(resolve())
+            await hook({"tool_input": "not a dict"}, "req-nd", None)
+
+        events = await self._run_with_hook(task_id, writer, call_hook)
+        aq_events = [e for e in events if e["event"] == "ask_user_question"]
+        self.assertEqual(len(aq_events), 1)
+        self.assertEqual(aq_events[0]["data"]["questions"], [])
+
+    async def test_none_tool_input_falls_back_to_empty_questions(self):
+        """When tool_input is None (get_field returns {}), questions should default to []."""
+        task_id = "aq-nondict-none"
+        writer = MockWriter()
+
+        async def call_hook(hook):
+            async def resolve():
+                agent.handle_answer_question(
+                    {"type": "answer_question", "request_id": "req-nn", "answers": {}}
+                )
+
+            asyncio.create_task(resolve())
+            # input_data has no tool_input key at all, so get_field returns {} fallback
+            await hook({}, "req-nn", None)
+
+        events = await self._run_with_hook(task_id, writer, call_hook)
+        aq_events = [e for e in events if e["event"] == "ask_user_question"]
+        self.assertEqual(len(aq_events), 1)
+        self.assertEqual(aq_events[0]["data"]["questions"], [])
+
+
+# ── build_prompt_stream tests ─────────────────────────────────────────────
+
+
+class TestBuildPromptStream(unittest.IsolatedAsyncioTestCase):
+    """build_prompt_stream yields exactly one dict with the expected shape."""
+
+    async def test_yields_exactly_one_dict(self):
+        items = []
+        async for item in agent.build_prompt_stream("hello world"):
+            items.append(item)
+        self.assertEqual(len(items), 1)
+
+    async def test_yielded_dict_has_expected_shape(self):
+        items = []
+        async for item in agent.build_prompt_stream("hello world"):
+            items.append(item)
+        d = items[0]
+        self.assertEqual(d["type"], "user")
+        self.assertEqual(d["session_id"], "")
+        self.assertIsNone(d["parent_tool_use_id"])
+        self.assertEqual(d["message"]["role"], "user")
+        self.assertEqual(d["message"]["content"], "hello world")
+
+    async def test_user_message_content_matches_input(self):
+        content = "test prompt with special chars: <>&"
+        items = []
+        async for item in agent.build_prompt_stream(content):
+            items.append(item)
+        self.assertEqual(items[0]["message"]["content"], content)
+
+    async def test_empty_content_string(self):
+        items = []
+        async for item in agent.build_prompt_stream(""):
+            items.append(item)
+        self.assertEqual(items[0]["message"]["content"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -72,8 +72,9 @@ export default function IconRail({
         </NavButton>
         <NavButton
           title="Sign out"
-          onClick={() => {
-            window.location.href = "/logout";
+          onClick={async () => {
+            await csrfFetch("/logout", { method: "POST" });
+            window.location.href = "/login";
           }}
         >
           <LogOut className="h-4 w-4" />

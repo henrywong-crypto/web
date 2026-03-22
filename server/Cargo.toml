@@ -23,7 +23,9 @@ futures = "0.3.32"
 handlers = { git = "https://github.com/llm-proxy-rs/cognito.git" }
 authorize = { git = "https://github.com/llm-proxy-rs/cognito.git" }
 token = { git = "https://github.com/llm-proxy-rs/cognito.git" }
+hex = "0.4"
 html-escape = "0.2.13"
+rand = "0.9"
 reqwest = { version = "0.12", features = ["json"] }
 russh = "0.57.1"
 russh-sftp = "2.1.1"

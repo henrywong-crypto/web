@@ -16,6 +16,7 @@ Use --no-test to skip the Firecracker smoke test after building:
 import argparse
 import http.client
 import json
+import re
 import shutil
 import socket
 import subprocess
@@ -41,6 +42,8 @@ set -e
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y curl logrotate socat
+# TODO: Supply-chain risk — piping curl to bash executes unverified remote code.
+# Ideally, pin to a specific version and verify with a checksum/signature.
 curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 """
 
@@ -58,6 +61,8 @@ LOGROTATE_CONF = """\
 # Runs as the ubuntu user inside the chroot.
 CHROOT_USER_SCRIPT = """\
 set -e
+# TODO: Supply-chain risk — piping curl to bash executes unverified remote code.
+# Ideally, pin to a specific version and verify with a checksum/signature.
 curl -fsSL https://claude.ai/install.sh | bash
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 """
@@ -100,7 +105,11 @@ def fetch_latest_fc_version() -> str:
 def list_s3_keys(fc_version: str, arch: str, prefix: str) -> list[str]:
     url = f"{S3_BUCKET}/?prefix=firecracker-ci/{fc_version}/{arch}/{prefix}&list-type=2"
     with urllib.request.urlopen(url) as resp:
-        xml = ET.fromstring(resp.read())
+        raw_xml = resp.read()
+        # Guard against XML bombs: reject unreasonably large responses before parsing.
+        if len(raw_xml) > 10 * 1024 * 1024:  # 10 MB
+            sys.exit("error: S3 listing response exceeds 10 MB, refusing to parse")
+        xml = ET.fromstring(raw_xml)
     ns = {"s3": "http://s3.amazonaws.com/doc/2006-03-01/"}
     return [el.text for el in xml.findall(".//s3:Key", ns) if el.text]
 
@@ -305,9 +314,14 @@ def install_agent(rootfs: Path, mcp_base_url: str | None = None) -> None:
 
         parsed = urlparse(mcp_base_url)
         host = parsed.hostname
+        # Validate hostname to prevent injection into the systemd service file.
+        if not host or not re.match(r'^[a-zA-Z0-9._-]+$', host):
+            sys.exit(f"error: invalid hostname in --mcp-base-url: {host!r}")
         port = parsed.port or (443 if parsed.scheme == "https" else 80)
         if parsed.scheme == "https":
-            upstream = f"OPENSSL:{host}:{port},verify=0"
+            # verify=1 ensures socat validates the upstream TLS certificate.
+            # If using a self-signed cert, add cafile= to point to the CA bundle.
+            upstream = f"OPENSSL:{host}:{port},verify=1"
         else:
             upstream = f"TCP:{host}:{port}"
         service_text = f"""\
@@ -317,7 +331,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/socat TCP-LISTEN:8443,fork,reuseaddr {upstream}
+ExecStart=/usr/bin/socat TCP-LISTEN:8443,fork,reuseaddr,bind=127.0.0.1 {upstream}
 Restart=always
 RestartSec=2
 

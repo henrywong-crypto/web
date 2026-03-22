@@ -24,6 +24,75 @@ fn is_valid_model(model: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | ':' | '/'))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn valid_model_simple() {
+        assert!(is_valid_model("claude-3-opus"));
+    }
+
+    #[test]
+    fn valid_model_with_dots_and_colons() {
+        assert!(is_valid_model("us.anthropic.claude-sonnet-4-6"));
+    }
+
+    #[test]
+    fn valid_model_with_slash_and_colon() {
+        assert!(is_valid_model("model/v1:latest"));
+    }
+
+    #[test]
+    fn valid_model_with_underscores() {
+        assert!(is_valid_model("my_model_v2"));
+    }
+
+    #[test]
+    fn invalid_model_empty() {
+        assert!(!is_valid_model(""));
+    }
+
+    #[test]
+    fn invalid_model_too_long() {
+        let long = "a".repeat(129);
+        assert!(!is_valid_model(&long));
+    }
+
+    #[test]
+    fn valid_model_at_max_length() {
+        let max = "a".repeat(128);
+        assert!(is_valid_model(&max));
+    }
+
+    #[test]
+    fn invalid_model_with_spaces() {
+        assert!(!is_valid_model("claude 3 opus"));
+    }
+
+    #[test]
+    fn invalid_model_with_semicolons() {
+        assert!(!is_valid_model("model;drop table"));
+    }
+
+    #[test]
+    fn invalid_model_with_newlines() {
+        assert!(!is_valid_model("model\ninjection"));
+    }
+
+    #[test]
+    fn invalid_model_with_backticks() {
+        assert!(!is_valid_model("model`whoami`"));
+    }
+
+    #[test]
+    fn invalid_model_with_special_chars() {
+        assert!(!is_valid_model("model$(cmd)"));
+        assert!(!is_valid_model("model&other"));
+        assert!(!is_valid_model("model|pipe"));
+    }
+}
+
 #[derive(Serialize)]
 pub(crate) struct SettingsResponse {
     uses_bedrock: bool,
@@ -83,6 +152,9 @@ pub(crate) async fn put_settings_handler(
         }
     }
     if let Some(api_key) = &body.api_key {
+        if api_key.is_empty() || api_key.len() > 256 {
+            return Ok((StatusCode::BAD_REQUEST, "Invalid API key").into_response());
+        }
         if state.config.use_iam_creds {
             return Ok(Json("API key not applicable in Bedrock mode").into_response());
         }

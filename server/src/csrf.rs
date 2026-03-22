@@ -5,9 +5,9 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use rand::RngCore;
 use subtle::ConstantTimeEq;
 use tower_sessions::Session;
-use uuid::Uuid;
 
 pub(crate) async fn csrf_middleware(session: Session, request: Request, next: Next) -> Response {
     let method = request.method().clone();
@@ -55,15 +55,108 @@ pub(crate) async fn get_csrf_token(session: &Session) -> Result<String> {
 }
 
 fn generate_token() -> String {
-    Uuid::new_v4().to_string().replace('-', "")
+    let mut buf = [0u8; 32];
+    rand::rng().fill_bytes(&mut buf);
+    hex::encode(buf)
 }
 
 fn constant_time_eq(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.as_bytes().ct_eq(b.as_bytes()).unwrap_u8() == 1
 }
 
-fn attach_csrf_token(response: &mut Response, csrf_token: &str) {
+fn attach_csrf_token<B>(response: &mut axum::http::Response<B>, csrf_token: &str) {
     if let Ok(value) = csrf_token.parse::<HeaderValue>() {
         response.headers_mut().insert("x-csrf-token", value);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::Response as HttpResponse;
+    use std::collections::HashSet;
+
+    // --- constant_time_eq tests ---
+
+    #[test]
+    fn constant_time_eq_equal_strings() {
+        assert!(constant_time_eq("hello", "hello"));
+    }
+
+    #[test]
+    fn constant_time_eq_unequal_strings() {
+        assert!(!constant_time_eq("hello", "world"));
+    }
+
+    #[test]
+    fn constant_time_eq_different_lengths() {
+        assert!(!constant_time_eq("short", "longer_string"));
+    }
+
+    #[test]
+    fn constant_time_eq_empty_strings() {
+        assert!(constant_time_eq("", ""));
+    }
+
+    #[test]
+    fn constant_time_eq_single_char() {
+        assert!(constant_time_eq("a", "a"));
+        assert!(!constant_time_eq("a", "b"));
+    }
+
+    #[test]
+    fn constant_time_eq_one_empty() {
+        assert!(!constant_time_eq("", "a"));
+        assert!(!constant_time_eq("a", ""));
+    }
+
+    // --- generate_token tests ---
+
+    #[test]
+    fn generate_token_is_64_hex_chars() {
+        let token = generate_token();
+        assert_eq!(token.len(), 64);
+        assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn generate_token_no_hyphens() {
+        let token = generate_token();
+        assert!(!token.contains('-'));
+    }
+
+    #[test]
+    fn generate_token_is_unique_each_call() {
+        let mut tokens = HashSet::new();
+        for _ in 0..100 {
+            tokens.insert(generate_token());
+        }
+        assert_eq!(tokens.len(), 100);
+    }
+
+    // --- attach_csrf_token tests ---
+
+    #[test]
+    fn attach_csrf_token_sets_header() {
+        let mut response = HttpResponse::builder().body(()).unwrap();
+        let token = "abc123def456";
+        attach_csrf_token(&mut response, token);
+        assert_eq!(
+            response.headers().get("x-csrf-token").unwrap().to_str().unwrap(),
+            token
+        );
+    }
+
+    #[test]
+    fn attach_csrf_token_overwrites_existing_header() {
+        let mut response = HttpResponse::builder()
+            .header("x-csrf-token", "old_value")
+            .body(())
+            .unwrap();
+        attach_csrf_token(&mut response, "new_value");
+        assert_eq!(
+            response.headers().get("x-csrf-token").unwrap().to_str().unwrap(),
+            "new_value"
+        );
     }
 }

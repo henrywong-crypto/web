@@ -50,6 +50,10 @@ pub(crate) async fn handle_chat_query(
     State(state): State<AppState>,
     Json(body): Json<QueryBody>,
 ) -> Result<Response, AppError> {
+    // Limit content size to prevent resource exhaustion (1MB)
+    if body.content.len() > 1_000_000 {
+        return Err(anyhow!("content exceeds maximum size").into());
+    }
     let task_id = Uuid::new_v4().to_string();
     let conversation_id = Uuid::parse_str(&body.conversation_id)
         .map_err(|_| anyhow!("invalid conversation_id: expected UUID"))?

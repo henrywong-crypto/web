@@ -103,8 +103,7 @@ pub(crate) async fn provision_gateway_api_key(
         .context("failed to call gateway api-keys endpoint")?;
     if !resp.status().is_success() {
         let status = resp.status();
-        let body = resp.text().await.context("failed to read gateway error response body")?;
-        anyhow::bail!("gateway api-keys endpoint returned {status}: {body}");
+        anyhow::bail!("gateway api-keys endpoint returned {status}");
     }
 
     #[derive(Deserialize)]

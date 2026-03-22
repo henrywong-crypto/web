@@ -21,6 +21,8 @@ import { useQuestionStorage } from "../hooks/useQuestionStorage";
 interface SseContextValue {
   vmId: string;
   vmReady: boolean;
+  /** Current CSRF token (rotated automatically on mutating requests). */
+  csrfToken: string;
   /** Fetch wrapper that auto-attaches and rotates the CSRF token for mutating requests. */
   csrfFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   uploadDir: string;
@@ -108,6 +110,16 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
           const res = await fetch("/api/vm-status");
           // If redirected to login page, navigate there
           if (res.redirected) {
+            try {
+              const redirectUrl = new URL(res.url);
+              if (redirectUrl.origin !== window.location.origin) {
+                window.location.href = "/";
+                return;
+              }
+            } catch {
+              window.location.href = "/";
+              return;
+            }
             window.location.href = res.url;
             return;
           }
@@ -364,6 +376,7 @@ export function SseProvider({ children }: { children: React.ReactNode }) {
       value={{
         vmId,
         vmReady,
+        csrfToken,
         csrfFetch,
         uploadDir,
         uploadAction,

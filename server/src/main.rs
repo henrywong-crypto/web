@@ -135,7 +135,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
         .route("/ws/{id}", get(handle_ws_upgrade))
         .route("/login", get(get_login_handler))
         .route("/login/cognito", get(get_cognito_login_handler))
-        .route("/logout", get(get_logout_handler))
+        .route("/logout", post(get_logout_handler))
         .route("/callback", get(get_callback_handler))
         .route("/callback/gateway", get(gateway_callback_handler))
         .route(
@@ -154,6 +154,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
 fn build_session_layer(session_store: PostgresStore) -> SessionManagerLayer<PostgresStore> {
     SessionManagerLayer::new(session_store)
         .with_secure(true)
+        .with_http_only(true)
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::seconds(86400)))
 }
@@ -171,12 +172,16 @@ async fn add_security_headers(request: Request, next: Next) -> Response {
         HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
     headers.insert(
+        "strict-transport-security",
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
+    headers.insert(
         "content-security-policy",
         HeaderValue::from_static(
             "default-src 'self'; \
              script-src 'self'; \
              style-src 'self' 'unsafe-inline'; \
-             connect-src 'self'; \
+             connect-src 'self' wss:; \
              img-src 'self' data: blob:; \
              font-src 'self'",
         ),

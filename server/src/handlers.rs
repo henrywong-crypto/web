@@ -517,6 +517,8 @@ pub(crate) async fn get_chat_transcript_handler(
     Query(query): Query<TranscriptQuery>,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
+    validate_session_id(&query.session_id)?;
+    validate_project_dir(&query.project_dir, &state.config.ssh_user_home)?;
     let history = fetch_chat_history(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
@@ -540,6 +542,8 @@ pub(crate) async fn delete_chat_session_handler(
     State(state): State<AppState>,
     Json(form): Json<DeleteChatSessionForm>,
 ) -> Result<Response, AppError> {
+    validate_session_id(&form.session_id)?;
+    validate_project_dir(&form.project_dir, &state.config.ssh_user_home)?;
     delete_chat_session(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
@@ -624,6 +628,34 @@ fn build_chat_upload_path(filename: &str) -> Result<PathBuf> {
     Ok(PathBuf::from("/tmp").join(format!("{ts}_{safe_name}")))
 }
 
+/// Validates that a session_id looks like a UUID (alphanumeric + hyphens only).
+/// Prevents path traversal via crafted session IDs like "../../etc/passwd".
+fn validate_session_id(session_id: &str) -> Result<(), AppError> {
+    if session_id.is_empty()
+        || session_id.len() > 64
+        || !session_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Err(anyhow!("invalid session_id").into());
+    }
+    Ok(())
+}
+
+/// Validates that a project_dir is an absolute path under the user's home directory.
+/// Prevents path traversal via crafted project directories.
+/// Uses Path::starts_with for component-aware matching (not string prefix).
+fn validate_project_dir(project_dir: &str, ssh_user_home: &Path) -> Result<(), AppError> {
+    let dir = Path::new(project_dir);
+    if !dir.is_absolute() || project_dir.contains("..") {
+        return Err(anyhow!("invalid project_dir").into());
+    }
+    if !dir.starts_with(ssh_user_home) {
+        return Err(anyhow!("project_dir is not under user home").into());
+    }
+    Ok(())
+}
+
 async fn write_chat_file_via_sftp(
     sftp: &SftpSession,
     path: &Path,
@@ -651,4 +683,118 @@ async fn write_chat_file_via_sftp(
         .context("sftp shutdown timed out")?
         .map_err(|_| anyhow!("sftp shutdown failed"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- validate_session_id tests ---
+
+    #[test]
+    fn valid_session_id_uuid() {
+        assert!(validate_session_id("550e8400-e29b-41d4-a716-446655440000").is_ok());
+    }
+
+    #[test]
+    fn valid_session_id_hex_only() {
+        assert!(validate_session_id("550e8400e29b41d4a716446655440000").is_ok());
+    }
+
+    #[test]
+    fn invalid_session_id_empty() {
+        assert!(validate_session_id("").is_err());
+    }
+
+    #[test]
+    fn invalid_session_id_path_traversal() {
+        assert!(validate_session_id("../../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn invalid_session_id_slash() {
+        assert!(validate_session_id("abc/def").is_err());
+    }
+
+    #[test]
+    fn invalid_session_id_too_long() {
+        let long = "a".repeat(65);
+        assert!(validate_session_id(&long).is_err());
+    }
+
+    #[test]
+    fn invalid_session_id_special_chars() {
+        assert!(validate_session_id("abc;def").is_err());
+        assert!(validate_session_id("abc\ndef").is_err());
+    }
+
+    // --- validate_project_dir tests ---
+
+    #[test]
+    fn valid_project_dir() {
+        let home = PathBuf::from("/home/ubuntu");
+        assert!(validate_project_dir("/home/ubuntu/.claude/projects/foo", &home).is_ok());
+    }
+
+    #[test]
+    fn invalid_project_dir_relative() {
+        let home = PathBuf::from("/home/ubuntu");
+        assert!(validate_project_dir("relative/path", &home).is_err());
+    }
+
+    #[test]
+    fn invalid_project_dir_traversal() {
+        let home = PathBuf::from("/home/ubuntu");
+        assert!(validate_project_dir("/home/ubuntu/../etc", &home).is_err());
+    }
+
+    #[test]
+    fn invalid_project_dir_outside_home() {
+        let home = PathBuf::from("/home/ubuntu");
+        assert!(validate_project_dir("/etc/passwd", &home).is_err());
+    }
+
+    #[test]
+    fn invalid_project_dir_prefix_confusion() {
+        // /home/ubuntuevil should NOT pass when home is /home/ubuntu
+        let home = PathBuf::from("/home/ubuntu");
+        assert!(validate_project_dir("/home/ubuntuevil/project", &home).is_err());
+    }
+
+    // --- build_chat_upload_path tests ---
+
+    #[test]
+    fn chat_upload_path_normal_filename() {
+        let path = build_chat_upload_path("test.png").unwrap();
+        assert!(path.starts_with("/tmp"));
+        assert!(path.to_string_lossy().contains("test.png"));
+    }
+
+    #[test]
+    fn chat_upload_path_sanitizes_traversal() {
+        let path = build_chat_upload_path("../../../etc/passwd").unwrap();
+        // sanitize_filename removes path separators; the remaining filename
+        // is harmless because validate_within_dir checks the canonical path
+        // before any SFTP write.
+        let name = path.file_name().unwrap().to_string_lossy();
+        assert!(!name.contains('/'));
+        assert!(path.starts_with("/tmp"));
+    }
+
+    #[test]
+    fn chat_upload_path_sanitizes_slashes() {
+        let path = build_chat_upload_path("path/to/file.txt").unwrap();
+        let name = path.file_name().unwrap().to_string_lossy();
+        assert!(!name.contains('/'));
+    }
+
+    #[test]
+    fn chat_upload_path_includes_timestamp() {
+        let path = build_chat_upload_path("file.txt").unwrap();
+        let name = path.file_name().unwrap().to_string_lossy();
+        // Timestamp is a large number followed by underscore
+        assert!(name.contains('_'));
+        let parts: Vec<&str> = name.splitn(2, '_').collect();
+        assert!(parts[0].parse::<u128>().is_ok());
+    }
 }
