@@ -123,7 +123,12 @@ function AppContent() {
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <IconRail
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          if (tab === "terminal") {
+            setTimeout(() => terminalRef.current?.focus(), 0);
+          }
+        }}
         hasUserRootfs={hasUserRootfs}
         csrfFetch={csrfFetch}
         onSettingsOpen={() => setShowSettings(true)}
