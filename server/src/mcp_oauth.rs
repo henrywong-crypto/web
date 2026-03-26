@@ -112,8 +112,6 @@ struct TokenResponse {
     access_token: String,
     #[serde(default)]
     refresh_token: Option<String>,
-    #[serde(default)]
-    token_type: Option<String>,
 }
 
 // ── Handlers ─────────────────────────────────────────────────────────────

@@ -403,7 +403,10 @@ function McpServersSection({
     registration_endpoint?: string;
     scopes_supported?: string[];
   } | null>(null);
+  const [oauthClientId, setOauthClientId] = useState("");
+  const [oauthClientSecret, setOauthClientSecret] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
+  const [registering, setRegistering] = useState(false);
 
   const loadServers = useCallback(async () => {
     setLoading(true);
@@ -431,6 +434,8 @@ function McpServersSection({
     setSaveError(null);
     setOauthDetected(false);
     setOauthMetadata(null);
+    setOauthClientId("");
+    setOauthClientSecret("");
   }, []);
 
   const parseHeaders = (text: string): Record<string, string> => {
@@ -469,45 +474,49 @@ function McpServersSection({
     }
   }, [formUrl]);
 
+  const handleAutoRegister = useCallback(async () => {
+    if (!oauthMetadata?.registration_endpoint) return;
+    setRegistering(true);
+    setSaveError(null);
+    try {
+      const regRes = await csrfFetch("/api/mcp-servers/oauth-register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          registration_endpoint: oauthMetadata.registration_endpoint,
+          client_name: "Claude Web",
+          redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
+        }),
+      });
+      if (!regRes.ok) {
+        const text = await regRes.text();
+        throw new Error(text || `HTTP ${regRes.status}`);
+      }
+      const regData = await regRes.json();
+      setOauthClientId(regData.client_id);
+      if (regData.client_secret) {
+        setOauthClientSecret(regData.client_secret);
+      }
+    } catch (err) {
+      setSaveError(`Auto-registration failed: ${String(err)}. Enter a Client ID manually.`);
+    } finally {
+      setRegistering(false);
+    }
+  }, [oauthMetadata, csrfFetch]);
+
   const handleOAuthAuthorize = useCallback(async () => {
-    if (!oauthMetadata || !formName.trim() || !formUrl.trim()) return;
+    if (!oauthMetadata || !formName.trim() || !formUrl.trim() || !oauthClientId.trim()) return;
     setAuthorizing(true);
     setSaveError(null);
     try {
-      // Step 1: Dynamic Client Registration if available
-      let clientId = "";
-      if (oauthMetadata.registration_endpoint) {
-        const regRes = await csrfFetch("/api/mcp-servers/oauth-register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            registration_endpoint: oauthMetadata.registration_endpoint,
-            client_name: "Claude Web",
-            redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
-          }),
-        });
-        if (regRes.ok) {
-          const regData = await regRes.json();
-          clientId = regData.client_id;
-        }
-      }
-
-      if (!clientId) {
-        setSaveError(
-          "Could not register OAuth client. You may need to register manually and use the headers approach.",
-        );
-        setAuthorizing(false);
-        return;
-      }
-
-      // Step 2: Start OAuth flow
       const startRes = await csrfFetch("/api/mcp-servers/oauth-start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           authorization_endpoint: oauthMetadata.authorization_endpoint,
           token_endpoint: oauthMetadata.token_endpoint,
-          client_id: clientId,
+          client_id: oauthClientId.trim(),
+          client_secret: oauthClientSecret.trim() || undefined,
           scopes: oauthMetadata.scopes_supported?.join(" ") ?? "",
           mcp_url: formUrl.trim(),
           server_name: formName.trim(),
@@ -522,7 +531,7 @@ function McpServersSection({
       setSaveError(String(err));
       setAuthorizing(false);
     }
-  }, [oauthMetadata, formName, formUrl, csrfFetch]);
+  }, [oauthMetadata, formName, formUrl, oauthClientId, oauthClientSecret, csrfFetch]);
 
   const handleAdd = useCallback(async () => {
     if (!formName.trim() || !formUrl.trim()) return;
@@ -651,12 +660,38 @@ function McpServersSection({
                   OAuth required
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  This server requires OAuth authorization. Click below to authenticate.
+                  This server requires OAuth. Enter a Client ID or auto-register.
                 </p>
               </div>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={oauthClientId}
+                  onChange={(e) => setOauthClientId(e.target.value)}
+                  placeholder="Client ID"
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                />
+                {oauthMetadata.registration_endpoint && (
+                  <button
+                    onClick={handleAutoRegister}
+                    disabled={registering}
+                    className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                    title="Auto-register via Dynamic Client Registration"
+                  >
+                    {registering ? "Registering…" : "Auto Register"}
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                value={oauthClientSecret}
+                onChange={(e) => setOauthClientSecret(e.target.value)}
+                placeholder="Client Secret (optional)"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+              />
               <button
                 onClick={handleOAuthAuthorize}
-                disabled={!formName.trim() || authorizing}
+                disabled={!formName.trim() || !oauthClientId.trim() || authorizing}
                 className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
