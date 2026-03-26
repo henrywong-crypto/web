@@ -2552,5 +2552,157 @@ class TestQuerySemaphore(unittest.IsolatedAsyncioTestCase):
             agent._query_semaphore = original
 
 
+class TestLoadMcpServers(unittest.TestCase):
+    """load_mcp_servers merges build-time MCP_SERVERS with ~/.claude.json runtime config."""
+
+    def test_returns_empty_dict_when_no_build_time_or_file(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {}
+        try:
+            with unittest.mock.patch("builtins.open", side_effect=FileNotFoundError):
+                result = agent.load_mcp_servers()
+            self.assertEqual(result, {})
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_returns_build_time_servers_when_file_not_found(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {
+            "builtin": {"type": "http", "url": "http://localhost:8443/mcp"}
+        }
+        try:
+            with unittest.mock.patch("builtins.open", side_effect=FileNotFoundError):
+                result = agent.load_mcp_servers()
+            self.assertEqual(result, {
+                "builtin": {"type": "http", "url": "http://localhost:8443/mcp"}
+            })
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_returns_file_servers_when_no_build_time(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {}
+        try:
+            file_content = json.dumps({
+                "mcpServers": {
+                    "my-server": {"type": "http", "url": "https://example.com/mcp"}
+                }
+            })
+            with unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open(read_data=file_content)
+            ):
+                result = agent.load_mcp_servers()
+            self.assertEqual(result, {
+                "my-server": {"type": "http", "url": "https://example.com/mcp"}
+            })
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_merges_build_time_and_file_servers(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {
+            "builtin": {"type": "http", "url": "http://localhost:8443/mcp"}
+        }
+        try:
+            file_content = json.dumps({
+                "mcpServers": {
+                    "runtime": {"type": "http", "url": "https://runtime.com/mcp"}
+                }
+            })
+            with unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open(read_data=file_content)
+            ):
+                result = agent.load_mcp_servers()
+            self.assertIn("builtin", result)
+            self.assertIn("runtime", result)
+            self.assertEqual(result["builtin"]["url"], "http://localhost:8443/mcp")
+            self.assertEqual(result["runtime"]["url"], "https://runtime.com/mcp")
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_file_servers_override_build_time_on_name_conflict(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {
+            "shared": {"type": "http", "url": "http://old.com"}
+        }
+        try:
+            file_content = json.dumps({
+                "mcpServers": {
+                    "shared": {"type": "http", "url": "https://new.com"}
+                }
+            })
+            with unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open(read_data=file_content)
+            ):
+                result = agent.load_mcp_servers()
+            self.assertEqual(result["shared"]["url"], "https://new.com")
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_handles_invalid_json_in_file(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {"builtin": {"type": "http"}}
+        try:
+            with unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open(read_data="not valid json")
+            ):
+                result = agent.load_mcp_servers()
+            self.assertEqual(result, {"builtin": {"type": "http"}})
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_handles_file_with_no_mcp_servers_key(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {}
+        try:
+            file_content = json.dumps({"env": {"FOO": "bar"}})
+            with unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open(read_data=file_content)
+            ):
+                result = agent.load_mcp_servers()
+            self.assertEqual(result, {})
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_does_not_mutate_original_mcp_servers(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {"builtin": {"type": "http"}}
+        try:
+            file_content = json.dumps({
+                "mcpServers": {"extra": {"type": "http"}}
+            })
+            with unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open(read_data=file_content)
+            ):
+                result = agent.load_mcp_servers()
+            self.assertNotIn("extra", agent.MCP_SERVERS)
+            self.assertIn("extra", result)
+        finally:
+            agent.MCP_SERVERS = original
+
+    def test_preserves_headers_from_file(self):
+        original = agent.MCP_SERVERS
+        agent.MCP_SERVERS = {}
+        try:
+            file_content = json.dumps({
+                "mcpServers": {
+                    "auth-server": {
+                        "type": "http",
+                        "url": "https://example.com/mcp",
+                        "headers": {"Authorization": "Bearer sk-123"},
+                    }
+                }
+            })
+            with unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open(read_data=file_content)
+            ):
+                result = agent.load_mcp_servers()
+            self.assertEqual(
+                result["auth-server"]["headers"]["Authorization"], "Bearer sk-123"
+            )
+        finally:
+            agent.MCP_SERVERS = original
+
+
 if __name__ == "__main__":
     unittest.main()

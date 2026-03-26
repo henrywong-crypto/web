@@ -312,6 +312,17 @@ export interface AppController {
   lastDeleteCsrfToken(): string | null;
   /** Whether a renew-gateway-key request was received. */
   renewGatewayKeyRequested(): boolean;
+  /** Body of the most recent POST /api/mcp-servers, or null. */
+  lastMcpAdd(): { name: string; url: string; headers?: Record<string, string> } | null;
+  /** Name from the most recent DELETE /api/mcp-servers/:name, or null. */
+  lastMcpDelete(): string | null;
+}
+
+export interface McpServerEntry {
+  name: string;
+  type: string;
+  url: string;
+  headers?: Record<string, string>;
 }
 
 export interface SetupOpts {
@@ -336,6 +347,10 @@ export interface SetupOpts {
   renewGatewayKeyError?: boolean;
   /** When set, POST /api/renew-gateway-key returns a redirect URL. */
   renewGatewayKeyRedirect?: string;
+  /** Initial MCP servers returned by GET /api/mcp-servers. */
+  mcpServers?: McpServerEntry[];
+  /** When true, POST /api/mcp-servers returns a 500 error. */
+  mcpAddError?: boolean;
   /** Override the vmId in app-config. Defaults to VM_ID ("test-vm"). Set to "" to test provisioning flow. */
   vmId?: string;
 }
@@ -372,6 +387,9 @@ export async function setupApp(
   let settingsResponseToken: string | null = null;
   let lastDeleteCsrfTokenValue: string | null = null;
   let renewGatewayKeyReceived = false;
+  let mcpServers: McpServerEntry[] = opts.mcpServers ?? [];
+  let lastMcpAddBody: { name: string; url: string; headers?: Record<string, string> } | null = null;
+  let lastMcpDeleteName: string | null = null;
 
   // SSE event delivery — shared between POST /chat and GET /chat-stream/**
   //
@@ -584,6 +602,47 @@ export async function setupApp(
     }
   });
 
+  // ── MCP servers endpoints ─────────────────────────────────────────────
+  await page.route("**/api/mcp-servers/**", async (route) => {
+    // DELETE /api/mcp-servers/:name
+    if (route.request().method() === "DELETE") {
+      const url = new URL(route.request().url());
+      const parts = url.pathname.split("/");
+      lastMcpDeleteName = decodeURIComponent(parts[parts.length - 1]);
+      mcpServers = mcpServers.filter((s) => s.name !== lastMcpDeleteName);
+      await route.fulfill({ status: 204 });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.route("**/api/mcp-servers", async (route) => {
+    if (route.request().method() === "POST") {
+      if (opts.mcpAddError) {
+        await route.fulfill({ status: 500, body: "Internal Server Error" });
+      } else {
+        lastMcpAddBody = route.request().postDataJSON() as {
+          name: string;
+          url: string;
+          headers?: Record<string, string>;
+        };
+        mcpServers.push({
+          name: lastMcpAddBody.name,
+          type: "http",
+          url: lastMcpAddBody.url,
+          headers: lastMcpAddBody.headers,
+        });
+        await route.fulfill({ status: 201 });
+      }
+    } else {
+      // GET
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mcpServers),
+      });
+    }
+  });
+
   // ── Stop endpoint ────────────────────────────────────────────────────────
   await page.route("**/chat-stop", async (route) => {
     stopReceived = true;
@@ -757,6 +816,8 @@ export async function setupApp(
     },
     lastDeleteCsrfToken: () => lastDeleteCsrfTokenValue,
     renewGatewayKeyRequested: () => renewGatewayKeyReceived,
+    lastMcpAdd: () => lastMcpAddBody,
+    lastMcpDelete: () => lastMcpDeleteName,
   };
 }
 

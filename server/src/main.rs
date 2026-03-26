@@ -6,6 +6,7 @@ mod files;
 mod gateway_auth;
 mod gateway_callback;
 mod handlers;
+mod mcp;
 mod settings;
 mod state;
 mod static_files;
@@ -20,7 +21,7 @@ use axum::{
     http::HeaderValue,
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use firecracker_manager::{cleanup_stale_vms, setup_host_networking};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -48,6 +49,7 @@ use crate::{
         get_csrf_token_handler, get_or_create_terminal, get_terminal_page, handle_chat_upload,
         list_chat_sessions_handler, vm_status_handler,
     },
+    mcp::{add_handler as mcp_add_handler, delete_handler as mcp_delete_handler, list_handler as mcp_list_handler},
     settings::{get_settings_handler, put_settings_handler},
     state::{AppState, load_config},
     static_files::{load_static_assets, serve_app_js, serve_font, serve_styles_css},
@@ -145,6 +147,11 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
             "/api/settings",
             get(get_settings_handler).put(put_settings_handler),
         )
+        .route(
+            "/api/mcp-servers",
+            get(mcp_list_handler).post(mcp_add_handler),
+        )
+        .route("/api/mcp-servers/{name}", delete(mcp_delete_handler))
         .route("/api/vm-status", get(vm_status_handler))
         .route("/api/csrf-token", get(get_csrf_token_handler))
         .route("/rootfs/delete", post(delete_user_rootfs_handler))
