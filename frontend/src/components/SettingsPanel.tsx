@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Check, Plus, Trash2, X } from "lucide-react";
+import { Check, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 import type { UiPreferences } from "../hooks/useUiPreferences";
 import type { McpServer } from "../types";
@@ -394,6 +394,17 @@ function McpServersSection({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // OAuth state
+  const [detecting, setDetecting] = useState(false);
+  const [oauthDetected, setOauthDetected] = useState(false);
+  const [oauthMetadata, setOauthMetadata] = useState<{
+    authorization_endpoint: string;
+    token_endpoint: string;
+    registration_endpoint?: string;
+    scopes_supported?: string[];
+  } | null>(null);
+  const [authorizing, setAuthorizing] = useState(false);
+
   const loadServers = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -412,6 +423,16 @@ function McpServersSection({
     loadServers();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const resetForm = useCallback(() => {
+    setFormName("");
+    setFormUrl("");
+    setFormHeaders("");
+    setShowForm(false);
+    setSaveError(null);
+    setOauthDetected(false);
+    setOauthMetadata(null);
+  }, []);
+
   const parseHeaders = (text: string): Record<string, string> => {
     const headers: Record<string, string> = {};
     for (const line of text.split("\n")) {
@@ -424,6 +445,84 @@ function McpServersSection({
     }
     return headers;
   };
+
+  const handleDetectAuth = useCallback(async () => {
+    if (!formUrl.trim()) return;
+    setDetecting(true);
+    setSaveError(null);
+    setOauthDetected(false);
+    setOauthMetadata(null);
+    try {
+      const res = await fetch(
+        `/api/mcp-servers/oauth-discover?url=${encodeURIComponent(formUrl.trim())}`,
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.oauth && data.metadata) {
+        setOauthDetected(true);
+        setOauthMetadata(data.metadata);
+      }
+    } catch (err) {
+      setSaveError(`Auth detection failed: ${String(err)}`);
+    } finally {
+      setDetecting(false);
+    }
+  }, [formUrl]);
+
+  const handleOAuthAuthorize = useCallback(async () => {
+    if (!oauthMetadata || !formName.trim() || !formUrl.trim()) return;
+    setAuthorizing(true);
+    setSaveError(null);
+    try {
+      // Step 1: Dynamic Client Registration if available
+      let clientId = "";
+      if (oauthMetadata.registration_endpoint) {
+        const regRes = await csrfFetch("/api/mcp-servers/oauth-register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            registration_endpoint: oauthMetadata.registration_endpoint,
+            client_name: "Claude Web",
+            redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
+          }),
+        });
+        if (regRes.ok) {
+          const regData = await regRes.json();
+          clientId = regData.client_id;
+        }
+      }
+
+      if (!clientId) {
+        setSaveError(
+          "Could not register OAuth client. You may need to register manually and use the headers approach.",
+        );
+        setAuthorizing(false);
+        return;
+      }
+
+      // Step 2: Start OAuth flow
+      const startRes = await csrfFetch("/api/mcp-servers/oauth-start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          authorization_endpoint: oauthMetadata.authorization_endpoint,
+          token_endpoint: oauthMetadata.token_endpoint,
+          client_id: clientId,
+          scopes: oauthMetadata.scopes_supported?.join(" ") ?? "",
+          mcp_url: formUrl.trim(),
+          server_name: formName.trim(),
+        }),
+      });
+      if (!startRes.ok) throw new Error((await startRes.text()) || `HTTP ${startRes.status}`);
+      const startData = await startRes.json();
+      if (startData.redirect) {
+        window.location.href = startData.redirect;
+      }
+    } catch (err) {
+      setSaveError(String(err));
+      setAuthorizing(false);
+    }
+  }, [oauthMetadata, formName, formUrl, csrfFetch]);
 
   const handleAdd = useCallback(async () => {
     if (!formName.trim() || !formUrl.trim()) return;
@@ -441,17 +540,14 @@ function McpServersSection({
         }),
       });
       if (!res.ok) throw new Error((await res.text()) || `HTTP ${res.status}`);
-      setFormName("");
-      setFormUrl("");
-      setFormHeaders("");
-      setShowForm(false);
+      resetForm();
       await loadServers();
     } catch (err) {
       setSaveError(String(err));
     } finally {
       setSaving(false);
     }
-  }, [formName, formUrl, formHeaders, csrfFetch, loadServers]);
+  }, [formName, formUrl, formHeaders, csrfFetch, loadServers, resetForm]);
 
   const handleDelete = useCallback(
     async (name: string) => {
@@ -526,43 +622,81 @@ function McpServersSection({
             placeholder="Server name"
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
           />
-          <input
-            type="text"
-            value={formUrl}
-            onChange={(e) => setFormUrl(e.target.value)}
-            placeholder="https://example.com/mcp"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-          />
-          <textarea
-            value={formHeaders}
-            onChange={(e) => setFormHeaders(e.target.value)}
-            placeholder={"Authorization=Bearer token\nX-API-Key=your-key"}
-            rows={2}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none"
-          />
-          <p className="text-xs text-muted-foreground">
-            One header per line, in Key=Value format.
-          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={formUrl}
+              onChange={(e) => {
+                setFormUrl(e.target.value);
+                setOauthDetected(false);
+                setOauthMetadata(null);
+              }}
+              placeholder="https://example.com/mcp"
+              className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+            />
+            <button
+              onClick={handleDetectAuth}
+              disabled={!formUrl.trim() || detecting}
+              className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+              title="Detect if this server requires OAuth"
+            >
+              {detecting ? "Checking…" : "Detect Auth"}
+            </button>
+          </div>
+
+          {oauthDetected && oauthMetadata ? (
+            <div className="space-y-2">
+              <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                <p className="text-sm font-medium text-foreground">
+                  OAuth required
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  This server requires OAuth authorization. Click below to authenticate.
+                </p>
+              </div>
+              <button
+                onClick={handleOAuthAuthorize}
+                disabled={!formName.trim() || authorizing}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {authorizing ? "Redirecting…" : "Authorize with OAuth"}
+              </button>
+            </div>
+          ) : (
+            <>
+              <textarea
+                value={formHeaders}
+                onChange={(e) => setFormHeaders(e.target.value)}
+                placeholder={"Authorization=Bearer token\nX-API-Key=your-key"}
+                rows={2}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none"
+              />
+              <p className="text-xs text-muted-foreground">
+                Headers (Key=Value per line), or use Detect Auth for OAuth servers.
+              </p>
+            </>
+          )}
+
           {saveError && (
             <p className="text-sm text-red-400">{saveError}</p>
           )}
           <div className="flex justify-end gap-2">
             <button
-              onClick={() => {
-                setShowForm(false);
-                setSaveError(null);
-              }}
+              onClick={resetForm}
               className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent"
             >
               Cancel
             </button>
-            <button
-              onClick={handleAdd}
-              disabled={!formName.trim() || !formUrl.trim() || saving}
-              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
+            {!oauthDetected && (
+              <button
+                onClick={handleAdd}
+                disabled={!formName.trim() || !formUrl.trim() || saving}
+                className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+            )}
           </div>
         </div>
       ) : (

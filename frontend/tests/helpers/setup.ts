@@ -351,6 +351,17 @@ export interface SetupOpts {
   mcpServers?: McpServerEntry[];
   /** When true, POST /api/mcp-servers returns a 500 error. */
   mcpAddError?: boolean;
+  /** OAuth discover response for GET /api/mcp-servers/oauth-discover. null = no OAuth. */
+  mcpOAuthMetadata?: {
+    authorization_endpoint: string;
+    token_endpoint: string;
+    registration_endpoint?: string;
+    scopes_supported?: string[];
+  } | null;
+  /** Client ID returned by POST /api/mcp-servers/oauth-register. */
+  mcpOAuthClientId?: string;
+  /** Redirect URL returned by POST /api/mcp-servers/oauth-start. */
+  mcpOAuthRedirect?: string;
   /** Override the vmId in app-config. Defaults to VM_ID ("test-vm"). Set to "" to test provisioning flow. */
   vmId?: string;
 }
@@ -600,6 +611,41 @@ export async function setupApp(
         body: JSON.stringify({ status: "ok" }),
       });
     }
+  });
+
+  // ── MCP OAuth endpoints ──────────────────────────────────────────────
+  await page.route("**/api/mcp-servers/oauth-discover**", async (route) => {
+    if (opts.mcpOAuthMetadata) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ oauth: true, metadata: opts.mcpOAuthMetadata }),
+      });
+    } else {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ oauth: false, metadata: null }),
+      });
+    }
+  });
+  await page.route("**/api/mcp-servers/oauth-register", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        client_id: opts.mcpOAuthClientId ?? "mock-client-id",
+      }),
+    });
+  });
+  await page.route("**/api/mcp-servers/oauth-start", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        redirect: opts.mcpOAuthRedirect ?? "https://oauth.example.com/authorize?mock=1",
+      }),
+    });
   });
 
   // ── MCP servers endpoints ─────────────────────────────────────────────

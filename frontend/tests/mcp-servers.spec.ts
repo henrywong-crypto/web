@@ -188,4 +188,110 @@ test.describe("mcp servers", () => {
     await page.getByPlaceholder("Server name").fill("test");
     await expect(saveBtn).toBeEnabled();
   });
+
+  test("MCP-10 Detect Auth button appears next to URL field", async ({
+    page,
+  }) => {
+    await setupApp(page, { mcpServers: [] });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await expect(page.getByText("Detect Auth")).toBeVisible();
+  });
+
+  test("MCP-11 Detect Auth shows OAuth required when OAuth metadata found", async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.figma.com/authorize",
+        token_endpoint: "https://auth.figma.com/token",
+        registration_endpoint: "https://auth.figma.com/register",
+      },
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://mcp.figma.com/v1");
+    await page.getByText("Detect Auth").click();
+
+    await expect(page.getByText("OAuth required")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Authorize with OAuth" }),
+    ).toBeVisible();
+  });
+
+  test("MCP-12 No OAuth detected shows manual headers form", async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: null,
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://simple.example.com/mcp");
+    await page.getByText("Detect Auth").click();
+
+    // Should still show manual headers + Save
+    await expect(
+      page.getByPlaceholder("Authorization=Bearer token"),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Authorize with OAuth" }),
+    ).not.toBeVisible();
+  });
+
+  test("MCP-13 Detect Auth button disabled when URL is empty", async ({
+    page,
+  }) => {
+    await setupApp(page, { mcpServers: [] });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    const detectBtn = page.getByText("Detect Auth");
+    // URL is empty — button should be disabled
+    await expect(detectBtn).toBeDisabled();
+  });
+
+  test("MCP-14 Changing URL resets OAuth detection", async ({ page }) => {
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+      },
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://oauth.example.com/mcp");
+    await page.getByText("Detect Auth").click();
+    await expect(page.getByText("OAuth required")).toBeVisible();
+
+    // Change URL — OAuth state should reset
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://different.example.com");
+    await expect(page.getByText("OAuth required")).not.toBeVisible();
+  });
 });

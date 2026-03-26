@@ -7,6 +7,7 @@ mod gateway_auth;
 mod gateway_callback;
 mod handlers;
 mod mcp;
+mod mcp_oauth;
 mod settings;
 mod state;
 mod static_files;
@@ -50,6 +51,12 @@ use crate::{
         list_chat_sessions_handler, vm_status_handler,
     },
     mcp::{add_handler as mcp_add_handler, delete_handler as mcp_delete_handler, list_handler as mcp_list_handler},
+    mcp_oauth::{
+        callback_handler as mcp_oauth_callback_handler,
+        discover_handler as mcp_oauth_discover_handler,
+        register_handler as mcp_oauth_register_handler,
+        start_handler as mcp_oauth_start_handler,
+    },
     settings::{get_settings_handler, put_settings_handler},
     state::{AppState, load_config},
     static_files::{load_static_assets, serve_app_js, serve_font, serve_styles_css},
@@ -152,6 +159,9 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
             get(mcp_list_handler).post(mcp_add_handler),
         )
         .route("/api/mcp-servers/{name}", delete(mcp_delete_handler))
+        .route("/api/mcp-servers/oauth-discover", get(mcp_oauth_discover_handler))
+        .route("/api/mcp-servers/oauth-register", post(mcp_oauth_register_handler))
+        .route("/api/mcp-servers/oauth-start", post(mcp_oauth_start_handler))
         .route("/api/vm-status", get(vm_status_handler))
         .route("/api/csrf-token", get(get_csrf_token_handler))
         .route("/rootfs/delete", post(delete_user_rootfs_handler))
@@ -162,6 +172,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
         .route("/logout", post(get_logout_handler))
         .route("/callback", get(get_callback_handler))
         .route("/callback/gateway", get(gateway_callback_handler))
+        .route("/callback/mcp-oauth", get(mcp_oauth_callback_handler))
         .route("/api/renew-gateway-key", post(renew_gateway_key_handler))
         .route("/static/app.js", get(serve_app_js))
         .route("/static/styles.css", get(serve_styles_css))
