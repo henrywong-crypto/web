@@ -381,7 +381,7 @@ pub(crate) async fn callback_handler(
         .ok()
         .flatten();
     let user_id = if let Some(email) = &user_email {
-        store::get_user_by_email(&state.pg_pool, email)
+        store::get_user_by_email(&state.db, email)
             .await
             .ok()
             .flatten()
