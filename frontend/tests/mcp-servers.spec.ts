@@ -8,6 +8,14 @@
  * MCP-07  Add form cancel         — cancel hides the form without saving
  * MCP-08  Add server error        — server error shows failure message
  * MCP-09  Add button disabled     — save is disabled when name or URL empty
+ * MCP-10  Detect Auth button      — detect auth button appears next to URL
+ * MCP-11  OAuth detected          — shows OAuth required when metadata found
+ * MCP-12  No OAuth detected       — shows manual headers form
+ * MCP-13  Detect Auth disabled    — disabled when URL empty
+ * MCP-14  URL change resets OAuth — changing URL resets detection
+ * MCP-15  Auto-registration       — shows "OAuth ready" on successful auto-registration
+ * MCP-16  OAuth authorize body    — sends correct parameters to oauth-start
+ * MCP-17  New metadata fields     — handles code_challenge_methods_supported etc.
  */
 import { test, expect } from "@playwright/test";
 import { setupApp } from "./helpers/setup";
@@ -293,5 +301,119 @@ test.describe("mcp servers", () => {
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://different.example.com");
     await expect(page.getByText("OAuth required")).not.toBeVisible();
+  });
+
+  test("MCP-15 Auto-registration success shows OAuth ready", async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+        registration_endpoint: "https://auth.example.com/register",
+      },
+      mcpOAuthClientId: "auto-registered-client",
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://mcp.example.com/v1");
+    await page.getByText("Detect Auth").click();
+
+    // Auto-registration should succeed and show "OAuth ready"
+    await expect(page.getByText("OAuth ready")).toBeVisible();
+    await expect(
+      page.getByText("Client registered automatically"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Authorize with OAuth" }),
+    ).toBeVisible();
+  });
+
+  test("MCP-16 OAuth authorize button sends correct parameters", async ({
+    page,
+  }) => {
+    let startBody: Record<string, unknown> | null = null;
+    await page.route("**/api/mcp-servers/oauth-start", async (route) => {
+      startBody = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ redirect: "https://auth.example.com/authorize?mock=1" }),
+      });
+    });
+
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+        registration_endpoint: "https://auth.example.com/register",
+        scopes_supported: ["read", "write"],
+      },
+      mcpOAuthClientId: "test-client-id",
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page.getByPlaceholder("Server name").fill("test-server");
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://mcp.example.com/v1");
+    await page.getByText("Detect Auth").click();
+    await expect(page.getByText("OAuth ready")).toBeVisible();
+
+    // Intercept navigation to prevent leaving the page
+    await page.route("https://auth.example.com/**", async (route) => {
+      await route.abort();
+    });
+
+    await page.getByRole("button", { name: "Authorize with OAuth" }).click();
+
+    // Verify the POST body sent to oauth-start
+    expect(startBody).not.toBeNull();
+    expect(startBody!.authorization_endpoint).toBe("https://auth.example.com/authorize");
+    expect(startBody!.token_endpoint).toBe("https://auth.example.com/token");
+    expect(startBody!.client_id).toBe("test-client-id");
+    expect(startBody!.server_name).toBe("test-server");
+    expect(startBody!.mcp_url).toBe("https://mcp.example.com/v1");
+    expect(startBody!.scopes).toBe("read write");
+  });
+
+  test("MCP-17 Discover returns metadata with new fields", async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+        code_challenge_methods_supported: ["S256"],
+        grant_types_supported: ["authorization_code", "refresh_token"],
+        token_endpoint_auth_methods_supported: ["none"],
+      },
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://mcp.example.com");
+    await page.getByText("Detect Auth").click();
+
+    // Should detect OAuth and show the auth flow UI
+    await expect(page.getByText("OAuth required")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Authorize with OAuth" }),
+    ).toBeVisible();
   });
 });

@@ -457,6 +457,8 @@ function McpServersSection({
     setSaveError(null);
     setOauthDetected(false);
     setOauthMetadata(null);
+    setOauthClientId("");
+    setOauthClientSecret("");
     try {
       const res = await fetch(
         `/api/mcp-servers/oauth-discover?url=${encodeURIComponent(formUrl.trim())}`,
@@ -466,13 +468,38 @@ function McpServersSection({
       if (data.oauth && data.metadata) {
         setOauthDetected(true);
         setOauthMetadata(data.metadata);
+
+        // Silently attempt Dynamic Client Registration
+        if (data.metadata.registration_endpoint) {
+          try {
+            const regRes = await csrfFetch("/api/mcp-servers/oauth-register", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                registration_endpoint: data.metadata.registration_endpoint,
+                client_name: "Claude Web",
+                redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
+                scope: data.metadata.scopes_supported?.join(" ") ?? undefined,
+              }),
+            });
+            if (regRes.ok) {
+              const regData = await regRes.json();
+              setOauthClientId(regData.client_id);
+              if (regData.client_secret) {
+                setOauthClientSecret(regData.client_secret);
+              }
+            }
+          } catch {
+            // Silent failure — user can enter client_id manually
+          }
+        }
       }
     } catch (err) {
       setSaveError(`Auth detection failed: ${String(err)}`);
     } finally {
       setDetecting(false);
     }
-  }, [formUrl]);
+  }, [formUrl, csrfFetch]);
 
   const handleAutoRegister = useCallback(async () => {
     if (!oauthMetadata?.registration_endpoint) return;
@@ -486,6 +513,7 @@ function McpServersSection({
           registration_endpoint: oauthMetadata.registration_endpoint,
           client_name: "Claude Web",
           redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
+          scope: oauthMetadata.scopes_supported?.join(" ") ?? undefined,
         }),
       });
       if (!regRes.ok) {
@@ -518,6 +546,7 @@ function McpServersSection({
           client_id: oauthClientId.trim(),
           client_secret: oauthClientSecret.trim() || undefined,
           scopes: oauthMetadata.scopes_supported?.join(" ") ?? "",
+          redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
           mcp_url: formUrl.trim(),
           server_name: formName.trim(),
         }),
@@ -655,40 +684,62 @@ function McpServersSection({
 
           {oauthDetected && oauthMetadata ? (
             <div className="space-y-2">
-              <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
-                <p className="text-sm font-medium text-foreground">
-                  OAuth required
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  This server requires OAuth. Enter a Client ID or auto-register.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={oauthClientId}
-                  onChange={(e) => setOauthClientId(e.target.value)}
-                  placeholder="Client ID"
-                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-                />
-                {oauthMetadata.registration_endpoint && (
-                  <button
-                    onClick={handleAutoRegister}
-                    disabled={registering}
-                    className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                    title="Auto-register via Dynamic Client Registration"
-                  >
-                    {registering ? "Registering…" : "Auto Register"}
-                  </button>
-                )}
-              </div>
-              <input
-                type="password"
-                value={oauthClientSecret}
-                onChange={(e) => setOauthClientSecret(e.target.value)}
-                placeholder="Client Secret (optional)"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-              />
+              {oauthClientId ? (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-3 py-2">
+                  <p className="text-sm font-medium text-foreground">
+                    OAuth ready
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Client registered automatically. Click below to authorize.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                  <p className="text-sm font-medium text-foreground">
+                    OAuth required
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Auto-registration not supported by this server. Create an
+                    OAuth app in the provider's developer settings and enter the
+                    Client ID below. Set the redirect URI to:{" "}
+                    <code className="rounded bg-muted px-1 py-0.5 text-foreground">
+                      {typeof window !== "undefined"
+                        ? `${window.location.origin}/callback/mcp-oauth`
+                        : "/callback/mcp-oauth"}
+                    </code>
+                  </p>
+                </div>
+              )}
+              {!oauthClientId && (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={oauthClientId}
+                      onChange={(e) => setOauthClientId(e.target.value)}
+                      placeholder="Client ID"
+                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                    />
+                    {oauthMetadata.registration_endpoint && (
+                      <button
+                        onClick={handleAutoRegister}
+                        disabled={registering}
+                        className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                        title="Retry auto-registration"
+                      >
+                        {registering ? "Trying…" : "Retry"}
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    value={oauthClientSecret}
+                    onChange={(e) => setOauthClientSecret(e.target.value)}
+                    placeholder="Client Secret (optional)"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                  />
+                </>
+              )}
               <button
                 onClick={handleOAuthAuthorize}
                 disabled={!formName.trim() || !oauthClientId.trim() || authorizing}

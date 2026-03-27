@@ -49,6 +49,46 @@ fn base_url(mcp_url: &str) -> Result<String, url::ParseError> {
     Ok(base)
 }
 
+/// Extract origin (scheme + host + port) and path component from a URL.
+/// Path has trailing slash stripped. Returns (origin, path) where path may be empty.
+fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
+    let parsed = Url::parse(raw_url)?;
+    let mut origin = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
+    if let Some(port) = parsed.port() {
+        origin.push_str(&format!(":{port}"));
+    }
+    let path = parsed.path().trim_end_matches('/').to_string();
+    Ok((origin, path))
+}
+
+/// Build RFC 9728 protected resource discovery URLs for a given MCP resource URL.
+fn build_protected_resource_urls(origin: &str, path: &str) -> Vec<String> {
+    if path.is_empty() {
+        vec![format!("{origin}/.well-known/oauth-protected-resource")]
+    } else {
+        vec![
+            format!("{origin}/.well-known/oauth-protected-resource{path}"),
+            format!("{origin}/.well-known/oauth-protected-resource"),
+        ]
+    }
+}
+
+/// Build RFC 8414 / OIDC authorization server metadata discovery URLs.
+fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) -> Vec<String> {
+    if path.is_empty() {
+        vec![
+            format!("{origin}/.well-known/oauth-authorization-server"),
+            format!("{origin}/.well-known/openid-configuration"),
+        ]
+    } else {
+        vec![
+            format!("{origin}/.well-known/oauth-authorization-server{path}"),
+            format!("{origin}/.well-known/openid-configuration{path}"),
+            format!("{full_url}/.well-known/openid-configuration"),
+        ]
+    }
+}
+
 // ── Types ────────────────────────────────────────────────────────────────
 
 /// OAuth 2.0 Authorization Server Metadata (subset we care about).
@@ -60,6 +100,19 @@ struct OAuthMetadata {
     registration_endpoint: Option<String>,
     #[serde(default)]
     scopes_supported: Option<Vec<String>>,
+    #[serde(default)]
+    code_challenge_methods_supported: Option<Vec<String>>,
+    #[serde(default)]
+    grant_types_supported: Option<Vec<String>>,
+    #[serde(default)]
+    token_endpoint_auth_methods_supported: Option<Vec<String>>,
+}
+
+/// Protected Resource Metadata per RFC 9728.
+#[derive(Deserialize, Debug)]
+struct ProtectedResourceMetadata {
+    #[serde(default)]
+    authorization_servers: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -79,6 +132,8 @@ pub(crate) struct RegisterBody {
     registration_endpoint: String,
     client_name: String,
     redirect_uri: String,
+    #[serde(default)]
+    scope: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -97,6 +152,7 @@ pub(crate) struct OAuthStartBody {
     client_secret: Option<String>,
     #[serde(default)]
     scopes: Option<String>,
+    redirect_uri: String,
     mcp_url: String,
     server_name: String,
 }
@@ -119,49 +175,56 @@ struct TokenResponse {
 /// GET /api/mcp-servers/oauth-discover?url=<mcp_url>
 ///
 /// Probe an MCP server for OAuth authorization server metadata.
+/// Follows the MCP spec: RFC 9728 (protected resource) then RFC 8414 (auth server).
 pub(crate) async fn discover_handler(
     Query(query): Query<DiscoverQuery>,
 ) -> Result<Response, AppError> {
-    let base = base_url(&query.url).map_err(|_| anyhow::anyhow!("invalid URL"))?;
-
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| anyhow::anyhow!("failed to build HTTP client: {e}"))?;
 
-    // Try RFC 8414 well-known endpoint
-    let well_known_url = format!("{base}/.well-known/oauth-authorization-server");
-    let resp = client.get(&well_known_url).send().await;
+    // ── Step 1: Protected Resource Discovery (RFC 9728) ──────────────────
+    // Discover which authorization server protects this MCP resource.
+    let (resource_origin, resource_path) =
+        origin_and_path(&query.url).map_err(|_| anyhow::anyhow!("invalid URL"))?;
 
-    if let Ok(resp) = resp {
-        if resp.status().is_success() {
-            if let Ok(metadata) = resp.json::<OAuthMetadata>().await {
-                return Ok(Json(DiscoverResponse {
-                    oauth: true,
-                    metadata: Some(metadata),
-                })
-                .into_response());
+    let protected_resource_urls = build_protected_resource_urls(&resource_origin, &resource_path);
+
+    let mut auth_server_url: Option<String> = None;
+    for url in &protected_resource_urls {
+        if let Ok(resp) = client.get(url).send().await {
+            if resp.status().is_success() {
+                if let Ok(meta) = resp.json::<ProtectedResourceMetadata>().await {
+                    if let Some(first) = meta.authorization_servers.into_iter().next() {
+                        auth_server_url = Some(first);
+                        break;
+                    }
+                }
             }
         }
     }
 
-    // Fallback: check if /authorize endpoint exists
-    let fallback_auth = format!("{base}/authorize");
-    let fallback_resp = client.get(&fallback_auth).send().await;
-    if let Ok(resp) = fallback_resp {
-        // If it returns anything other than 404, assume OAuth is available
-        if resp.status() != StatusCode::NOT_FOUND {
-            let metadata = OAuthMetadata {
-                authorization_endpoint: fallback_auth,
-                token_endpoint: format!("{base}/token"),
-                registration_endpoint: Some(format!("{base}/register")),
-                scopes_supported: None,
-            };
-            return Ok(Json(DiscoverResponse {
-                oauth: true,
-                metadata: Some(metadata),
-            })
-            .into_response());
+    // Fallback: treat the MCP server's base URL as the authorization server
+    let auth_server_url = auth_server_url.unwrap_or_else(|| resource_origin.clone());
+
+    // ── Step 2: Authorization Server Metadata Discovery (RFC 8414 / OIDC) ─
+    let (auth_origin, auth_path) =
+        origin_and_path(&auth_server_url).map_err(|_| anyhow::anyhow!("invalid auth server URL"))?;
+
+    let discovery_urls = build_auth_server_discovery_urls(&auth_origin, &auth_path, &auth_server_url);
+
+    for url in &discovery_urls {
+        if let Ok(resp) = client.get(url).send().await {
+            if resp.status().is_success() {
+                if let Ok(metadata) = resp.json::<OAuthMetadata>().await {
+                    return Ok(Json(DiscoverResponse {
+                        oauth: true,
+                        metadata: Some(metadata),
+                    })
+                    .into_response());
+                }
+            }
         }
     }
 
@@ -183,16 +246,21 @@ pub(crate) async fn register_handler(
         .build()
         .map_err(|e| anyhow::anyhow!("failed to build HTTP client: {e}"))?;
 
-    let reg_request = serde_json::json!({
+    let mut reg_request = serde_json::json!({
         "client_name": body.client_name,
         "redirect_uris": [body.redirect_uri],
         "grant_types": ["authorization_code"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",
     });
+    if let Some(ref scope) = body.scope {
+        reg_request["scope"] = serde_json::Value::String(scope.clone());
+    }
 
     let resp = client
         .post(&body.registration_endpoint)
+        .header("Content-Type", "application/json")
+        .header("MCP-Protocol-Version", "2025-03-26")
         .json(&reg_request)
         .send()
         .await
@@ -227,9 +295,7 @@ pub(crate) async fn start_handler(
     let code_challenge = compute_code_challenge(&code_verifier);
     let state = generate_state();
 
-    // Build redirect_uri from current origin — the callback route
-    // We'll use a relative path and let the frontend construct the full URL
-    let redirect_uri = "/callback/mcp-oauth";
+    let redirect_uri = &body.redirect_uri;
 
     // Store OAuth state in session
     session
@@ -258,6 +324,10 @@ pub(crate) async fn start_handler(
         .insert("mcp_oauth_mcp_url", &body.mcp_url)
         .await
         .context("failed to store mcp oauth mcp url")?;
+    session
+        .insert("mcp_oauth_redirect_uri", redirect_uri)
+        .await
+        .context("failed to store mcp oauth redirect uri")?;
     session
         .insert("mcp_oauth_server_name", &body.server_name)
         .await
@@ -333,6 +403,11 @@ pub(crate) async fn callback_handler(
         .await
         .context("failed to retrieve server name")?
         .context("server name missing")?;
+    let redirect_uri = session
+        .remove::<String>("mcp_oauth_redirect_uri")
+        .await
+        .context("failed to retrieve redirect uri")?
+        .context("redirect uri missing")?;
 
     // Exchange authorization code for tokens
     let http_client = reqwest::Client::builder()
@@ -343,7 +418,7 @@ pub(crate) async fn callback_handler(
     let mut token_params = vec![
         ("grant_type", "authorization_code".to_string()),
         ("code", query.code.clone()),
-        ("redirect_uri", "/callback/mcp-oauth".to_string()),
+        ("redirect_uri", redirect_uri),
         ("code_verifier", pkce_verifier),
         ("client_id", client_id),
     ];
@@ -535,5 +610,105 @@ mod tests {
             base_url("https://example.com/mcp?key=val#frag").unwrap(),
             "https://example.com"
         );
+    }
+
+    // ── origin_and_path tests ──────────────────────────────────────────
+
+    #[test]
+    fn origin_and_path_extracts_both() {
+        let (origin, path) = origin_and_path("https://api.example.com/v1/mcp").unwrap();
+        assert_eq!(origin, "https://api.example.com");
+        assert_eq!(path, "/v1/mcp");
+    }
+
+    #[test]
+    fn origin_and_path_strips_trailing_slash() {
+        let (origin, path) = origin_and_path("https://example.com/mcp/").unwrap();
+        assert_eq!(origin, "https://example.com");
+        assert_eq!(path, "/mcp");
+    }
+
+    #[test]
+    fn origin_and_path_root_url() {
+        let (origin, path) = origin_and_path("https://mcp.figma.com").unwrap();
+        assert_eq!(origin, "https://mcp.figma.com");
+        assert_eq!(path, "");
+    }
+
+    #[test]
+    fn origin_and_path_preserves_port() {
+        let (origin, path) = origin_and_path("https://localhost:8443/mcp").unwrap();
+        assert_eq!(origin, "https://localhost:8443");
+        assert_eq!(path, "/mcp");
+    }
+
+    #[test]
+    fn origin_and_path_rejects_invalid() {
+        assert!(origin_and_path("not a url").is_err());
+    }
+
+    // ── protected resource discovery URL tests ─────────────────────────
+
+    #[test]
+    fn protected_resource_urls_root_url() {
+        let urls = build_protected_resource_urls("https://mcp.figma.com", "");
+        assert_eq!(urls, vec![
+            "https://mcp.figma.com/.well-known/oauth-protected-resource",
+        ]);
+    }
+
+    #[test]
+    fn protected_resource_urls_with_path() {
+        let urls = build_protected_resource_urls("https://mcp.figma.com", "/v1");
+        assert_eq!(urls, vec![
+            "https://mcp.figma.com/.well-known/oauth-protected-resource/v1",
+            "https://mcp.figma.com/.well-known/oauth-protected-resource",
+        ]);
+    }
+
+    #[test]
+    fn protected_resource_urls_with_deep_path() {
+        let urls = build_protected_resource_urls("https://example.com", "/api/v2/mcp");
+        assert_eq!(urls, vec![
+            "https://example.com/.well-known/oauth-protected-resource/api/v2/mcp",
+            "https://example.com/.well-known/oauth-protected-resource",
+        ]);
+    }
+
+    // ── auth server discovery URL tests ────────────────────────────────
+
+    #[test]
+    fn auth_server_urls_root_url() {
+        let urls = build_auth_server_discovery_urls(
+            "https://auth.example.com", "", "https://auth.example.com",
+        );
+        assert_eq!(urls, vec![
+            "https://auth.example.com/.well-known/oauth-authorization-server",
+            "https://auth.example.com/.well-known/openid-configuration",
+        ]);
+    }
+
+    #[test]
+    fn auth_server_urls_with_path() {
+        let urls = build_auth_server_discovery_urls(
+            "https://auth.example.com", "/v1", "https://auth.example.com/v1",
+        );
+        assert_eq!(urls, vec![
+            "https://auth.example.com/.well-known/oauth-authorization-server/v1",
+            "https://auth.example.com/.well-known/openid-configuration/v1",
+            "https://auth.example.com/v1/.well-known/openid-configuration",
+        ]);
+    }
+
+    #[test]
+    fn auth_server_urls_with_port() {
+        let urls = build_auth_server_discovery_urls(
+            "https://localhost:8443", "/mcp", "https://localhost:8443/mcp",
+        );
+        assert_eq!(urls, vec![
+            "https://localhost:8443/.well-known/oauth-authorization-server/mcp",
+            "https://localhost:8443/.well-known/openid-configuration/mcp",
+            "https://localhost:8443/mcp/.well-known/openid-configuration",
+        ]);
     }
 }

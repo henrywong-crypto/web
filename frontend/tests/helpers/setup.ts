@@ -357,6 +357,9 @@ export interface SetupOpts {
     token_endpoint: string;
     registration_endpoint?: string;
     scopes_supported?: string[];
+    code_challenge_methods_supported?: string[];
+    grant_types_supported?: string[];
+    token_endpoint_auth_methods_supported?: string[];
   } | null;
   /** Client ID returned by POST /api/mcp-servers/oauth-register. */
   mcpOAuthClientId?: string;
