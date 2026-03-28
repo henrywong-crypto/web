@@ -105,12 +105,14 @@ mod tests {
 pub(crate) async fn prepare_jail_resources(chroot_dir: &Path, kernel_src: &Path) -> Result<()> {
     create_dir_all(chroot_dir.join("run")).await?;
     let kernel_dst = chroot_dir.join("vmlinux");
-    copy(kernel_src, &kernel_dst).await.with_context(|| {
-        format!(
-            "failed to copy kernel from {} to {}",
-            kernel_src.display(),
-            kernel_dst.display()
-        )
-    })?;
+    if !kernel_dst.exists() {
+        copy(kernel_src, &kernel_dst).await.with_context(|| {
+            format!(
+                "failed to copy kernel from {} to {}",
+                kernel_src.display(),
+                kernel_dst.display()
+            )
+        })?;
+    }
     Ok(())
 }

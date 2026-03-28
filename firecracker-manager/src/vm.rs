@@ -102,17 +102,19 @@ impl Drop for Vm {
         let _ = std::process::Command::new(&self.net_helper_path)
             .args(["tap-delete", &tap_name])
             .status();
+        cleanup_chroot(&self.chroot_dir);
         release_net_idx(self.net_idx);
     }
 }
 
-/// Removes everything in the chroot directory except rootfs.ext4.
+/// Removes everything in the chroot directory except rootfs.ext4 and vmlinux.
 fn cleanup_chroot(chroot_dir: &Path) {
     let Ok(entries) = std::fs::read_dir(chroot_dir) else {
         return;
     };
     for entry in entries.flatten() {
-        if entry.file_name() == "rootfs.ext4" {
+        let name = entry.file_name();
+        if name == "rootfs.ext4" || name == "vmlinux" {
             continue;
         }
         let path = entry.path();
