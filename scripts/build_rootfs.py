@@ -221,16 +221,16 @@ def setup_host_ssh_key(workdir: Path, rootfs: Path) -> Path:
     Public key  → returned (installed to /var/lib/fc/vm_host_key.pub so the server
                   can verify the VM and prevent MITM on the TAP network).
 
-    Reuses the existing host key from the rootfs /etc/ssh/ or INSTALL_DIR if present.
+    Reuses the existing host key from INSTALL_DIR if present.
     """
     private_key = workdir / "ssh_host_ed25519_key"
     public_key = workdir / "ssh_host_ed25519_key.pub"
     etc_ssh = rootfs / "etc/ssh"
     existing_pub = INSTALL_DIR / "vm_host_key.pub"
-    existing_priv = etc_ssh / "ssh_host_ed25519_key"
+    existing_priv = INSTALL_DIR / "vm_host_ed25519_key"
 
     if existing_pub.exists() and existing_priv.exists():
-        print(f"  reusing existing host SSH key: {existing_pub}")
+        print(f"  reusing existing host SSH key: {existing_priv}")
         shutil.copy(existing_priv, private_key)
         shutil.copy(existing_pub, public_key)
     else:
@@ -430,14 +430,22 @@ def install_artifacts(
     ext4_dest = INSTALL_DIR / ext4.name
     client_key_dest = INSTALL_DIR / f"{ubuntu_name}.id_ed25519"
     host_key_pub_dest = INSTALL_DIR / "vm_host_key.pub"
+    # Also persist the host private key so it can be reused on rebuild.
+    host_key_priv_dest = INSTALL_DIR / "vm_host_ed25519_key"
+    host_ssh_key_priv = host_ssh_key_pub.parent / "ssh_host_ed25519_key"
 
     shutil.move(str(kernel), str(kernel_dest))
     shutil.move(str(ext4), str(ext4_dest))
     shutil.move(str(client_ssh_key), str(client_key_dest))
     shutil.copy(str(host_ssh_key_pub), str(host_key_pub_dest))
+    if host_ssh_key_priv.exists():
+        shutil.copy(str(host_ssh_key_priv), str(host_key_priv_dest))
+        host_key_priv_dest.chmod(0o600)
 
     run(["chown", "-R", "ubuntu:ubuntu", str(INSTALL_DIR)])
     client_key_dest.chmod(0o600)
+    if host_key_priv_dest.exists():
+        host_key_priv_dest.chmod(0o600)
 
     return kernel_dest, ext4_dest, client_key_dest, host_key_pub_dest
 
