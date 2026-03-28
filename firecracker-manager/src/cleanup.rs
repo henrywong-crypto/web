@@ -4,16 +4,25 @@ use tokio::{fs, process::Command};
 use crate::network::delete_tap;
 
 pub async fn cleanup_stale_vms(net_helper_path: &Path, jailer_chroot_base: &Path) {
-    kill_stale_firecracker_processes().await;
+    stop_stale_firecracker_processes(jailer_chroot_base).await;
     delete_stale_tap_interfaces(net_helper_path).await;
     delete_stale_chroot_dirs(jailer_chroot_base).await;
 }
 
-async fn kill_stale_firecracker_processes() {
-    let _ = Command::new("pkill")
-        .args(["-f", "firecracker"])
-        .status()
-        .await;
+/// Finds running firecracker VMs by their sockets and stops them gracefully.
+async fn stop_stale_firecracker_processes(chroot_base: &Path) {
+    let firecracker_dir = chroot_base.join("firecracker");
+    let Ok(mut entries) = fs::read_dir(&firecracker_dir).await else {
+        return;
+    };
+    while let Ok(Some(entry)) = entries.next_entry().await {
+        let socket_path = entry.path().join("root/run/firecracker.socket");
+        if socket_path.exists() {
+            let _ = firecracker_client::stop_instance(&socket_path).await;
+        }
+    }
+    // Give processes time to exit after receiving shutdown
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 }
 
 async fn delete_stale_tap_interfaces(net_helper_path: &Path) {
