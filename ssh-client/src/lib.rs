@@ -15,7 +15,7 @@ use tokio::time::timeout;
 
 const TERMINAL_EXEC_CMD: &str = "bash -ic 'claude; exec bash'";
 const SSH_OP_TIMEOUT_SECS: u64 = 30;
-const SSH_CONNECT_TIMEOUT_SECS: u64 = 60;
+const SSH_CONNECT_TIMEOUT_SECS: u64 = 10;
 
 pub struct SshClient {
     vm_host_key: Option<PublicKey>,
