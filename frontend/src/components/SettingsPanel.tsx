@@ -407,6 +407,7 @@ function McpServersSection({
   const [oauthClientSecret, setOauthClientSecret] = useState("");
   const [authorizing, setAuthorizing] = useState(false);
   const [registering, setRegistering] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
 
   const loadServers = useCallback(async () => {
     setLoading(true);
@@ -436,6 +437,7 @@ function McpServersSection({
     setOauthMetadata(null);
     setOauthClientId("");
     setOauthClientSecret("");
+    setRegError(null);
   }, []);
 
   const parseHeaders = (text: string): Record<string, string> => {
@@ -455,6 +457,7 @@ function McpServersSection({
     if (!formUrl.trim()) return;
     setDetecting(true);
     setSaveError(null);
+    setRegError(null);
     setOauthDetected(false);
     setOauthMetadata(null);
     setOauthClientId("");
@@ -469,7 +472,7 @@ function McpServersSection({
         setOauthDetected(true);
         setOauthMetadata(data.metadata);
 
-        // Silently attempt Dynamic Client Registration
+        // Attempt Dynamic Client Registration
         if (data.metadata.registration_endpoint) {
           try {
             const regRes = await csrfFetch("/api/mcp-servers/oauth-register", {
@@ -488,9 +491,12 @@ function McpServersSection({
               if (regData.client_secret) {
                 setOauthClientSecret(regData.client_secret);
               }
+            } else {
+              const errText = await regRes.text();
+              setRegError(errText || `Registration failed: HTTP ${regRes.status}`);
             }
-          } catch {
-            // Silent failure — user can enter client_id manually
+          } catch (regErr) {
+            setRegError(`Registration request failed: ${String(regErr)}`);
           }
         }
       }
@@ -699,15 +705,22 @@ function McpServersSection({
                     OAuth required
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Auto-registration not supported by this server. Create an
-                    OAuth app in the provider's developer settings and enter the
-                    Client ID below. Set the redirect URI to:{" "}
+                    {regError
+                      ? "Auto-registration failed. Create an OAuth app in the provider's developer settings and enter the Client ID below."
+                      : "Auto-registration not supported by this server. Create an OAuth app in the provider's developer settings and enter the Client ID below."
+                    }{" "}
+                    Set the redirect URI to:{" "}
                     <code className="rounded bg-muted px-1 py-0.5 text-foreground">
                       {typeof window !== "undefined"
                         ? `${window.location.origin}/callback/mcp-oauth`
                         : "/callback/mcp-oauth"}
                     </code>
                   </p>
+                  {regError && (
+                    <p className="mt-1 text-xs text-red-400">
+                      {regError}
+                    </p>
+                  )}
                 </div>
               )}
               {!oauthClientId && (

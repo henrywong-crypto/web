@@ -249,7 +249,7 @@ pub(crate) async fn register_handler(
     let mut reg_request = serde_json::json!({
         "client_name": body.client_name,
         "redirect_uris": [body.redirect_uri],
-        "grant_types": ["authorization_code"],
+        "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
         "token_endpoint_auth_method": "none",
     });
@@ -269,6 +269,7 @@ pub(crate) async fn register_handler(
     if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().await.unwrap_or_default();
+        error!("mcp oauth registration failed: {status} {body_text}");
         return Ok((
             StatusCode::BAD_GATEWAY,
             format!("registration failed: {status} {body_text}"),
