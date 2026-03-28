@@ -206,20 +206,28 @@ pub(crate) async fn discover_handler(
 
     let mut auth_server_url: Option<String> = None;
     for url in &protected_resource_urls {
+        info!("mcp oauth discover: trying protected resource metadata at {url}");
         if let Ok(resp) = client.get(url).send().await {
-            if resp.status().is_success() {
+            let status = resp.status();
+            if status.is_success() {
                 if let Ok(meta) = resp.json::<ProtectedResourceMetadata>().await {
+                    info!("mcp oauth discover: found authorization_servers: {:?}", meta.authorization_servers);
                     if let Some(first) = meta.authorization_servers.into_iter().next() {
                         auth_server_url = Some(first);
                         break;
                     }
                 }
+            } else {
+                info!("mcp oauth discover: {url} returned {status}");
             }
         }
     }
 
     // Fallback: treat the MCP server's base URL as the authorization server
-    let auth_server_url = auth_server_url.unwrap_or_else(|| resource_origin.clone());
+    let auth_server_url = auth_server_url.unwrap_or_else(|| {
+        info!("mcp oauth discover: no protected resource metadata found, falling back to {resource_origin}");
+        resource_origin.clone()
+    });
 
     // ── Step 2: Authorization Server Metadata Discovery (RFC 8414 / OIDC) ─
     let (auth_origin, auth_path) =
@@ -228,15 +236,25 @@ pub(crate) async fn discover_handler(
     let discovery_urls = build_auth_server_discovery_urls(&auth_origin, &auth_path, &auth_server_url);
 
     for url in &discovery_urls {
+        info!("mcp oauth discover: trying auth server metadata at {url}");
         if let Ok(resp) = client.get(url).send().await {
-            if resp.status().is_success() {
+            let status = resp.status();
+            if status.is_success() {
                 if let Ok(metadata) = resp.json::<OAuthMetadata>().await {
+                    info!(
+                        "mcp oauth discover: found metadata — auth={}, token={}, register={:?}",
+                        metadata.authorization_endpoint,
+                        metadata.token_endpoint,
+                        metadata.registration_endpoint,
+                    );
                     return Ok(Json(DiscoverResponse {
                         oauth: true,
                         metadata: Some(metadata),
                     })
                     .into_response());
                 }
+            } else {
+                info!("mcp oauth discover: {url} returned {status}");
             }
         }
     }
@@ -285,6 +303,11 @@ pub(crate) async fn register_handler(
     if let Some(ref scope) = body.scope {
         reg_request["scope"] = serde_json::Value::String(scope.clone());
     }
+
+    info!(
+        "mcp oauth register: POST {} with auth_method={}, redirect_uri={}, scope={:?}",
+        body.registration_endpoint, auth_method, body.redirect_uri, body.scope
+    );
 
     let resp = client
         .post(&body.registration_endpoint)

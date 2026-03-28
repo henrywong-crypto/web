@@ -316,6 +316,8 @@ export interface AppController {
   lastMcpAdd(): { name: string; url: string; headers?: Record<string, string> } | null;
   /** Name from the most recent DELETE /api/mcp-servers/:name, or null. */
   lastMcpDelete(): string | null;
+  /** Body of the most recent POST /api/mcp-servers/oauth-register, or null. */
+  lastMcpRegister(): { registration_endpoint: string; client_name: string; redirect_uri: string; scope?: string; token_endpoint_auth_methods_supported?: string[] } | null;
 }
 
 export interface McpServerEntry {
@@ -363,6 +365,10 @@ export interface SetupOpts {
   } | null;
   /** Client ID returned by POST /api/mcp-servers/oauth-register. */
   mcpOAuthClientId?: string;
+  /** Client secret returned by POST /api/mcp-servers/oauth-register. */
+  mcpOAuthClientSecret?: string;
+  /** When true, POST /api/mcp-servers/oauth-register returns 403. */
+  mcpOAuthRegError?: boolean;
   /** Redirect URL returned by POST /api/mcp-servers/oauth-start. */
   mcpOAuthRedirect?: string;
   /** Override the vmId in app-config. Defaults to VM_ID ("test-vm"). Set to "" to test provisioning flow. */
@@ -404,6 +410,7 @@ export async function setupApp(
   let mcpServers: McpServerEntry[] = opts.mcpServers ?? [];
   let lastMcpAddBody: { name: string; url: string; headers?: Record<string, string> } | null = null;
   let lastMcpDeleteName: string | null = null;
+  let lastMcpRegisterBody: { registration_endpoint: string; client_name: string; redirect_uri: string; scope?: string; token_endpoint_auth_methods_supported?: string[] } | null = null;
 
   // SSE event delivery — shared between POST /chat and GET /chat-stream/**
   //
@@ -633,12 +640,30 @@ export async function setupApp(
     }
   });
   await page.route("**/api/mcp-servers/oauth-register", async (route) => {
+    if (opts.mcpOAuthRegError) {
+      await route.fulfill({
+        status: 403,
+        body: "Forbidden",
+      });
+      return;
+    }
+    lastMcpRegisterBody = route.request().postDataJSON() as {
+      registration_endpoint: string;
+      client_name: string;
+      redirect_uri: string;
+      scope?: string;
+      token_endpoint_auth_methods_supported?: string[];
+    };
+    const responseBody: Record<string, string> = {
+      client_id: opts.mcpOAuthClientId ?? "mock-client-id",
+    };
+    if (opts.mcpOAuthClientSecret) {
+      responseBody.client_secret = opts.mcpOAuthClientSecret;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({
-        client_id: opts.mcpOAuthClientId ?? "mock-client-id",
-      }),
+      body: JSON.stringify(responseBody),
     });
   });
   await page.route("**/api/mcp-servers/oauth-start", async (route) => {
@@ -867,6 +892,7 @@ export async function setupApp(
     renewGatewayKeyRequested: () => renewGatewayKeyReceived,
     lastMcpAdd: () => lastMcpAddBody,
     lastMcpDelete: () => lastMcpDeleteName,
+    lastMcpRegister: () => lastMcpRegisterBody,
   };
 }
 

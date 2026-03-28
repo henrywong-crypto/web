@@ -16,6 +16,9 @@
  * MCP-15  Auto-registration       — shows "OAuth ready" on successful auto-registration
  * MCP-16  OAuth authorize body    — sends correct parameters to oauth-start
  * MCP-17  New metadata fields     — handles code_challenge_methods_supported etc.
+ * MCP-18  Registration auth methods — passes token_endpoint_auth_methods_supported from metadata
+ * MCP-19  Registration failure    — shows error message on registration failure
+ * MCP-20  Auto-reg with secret   — auto-registration with client_secret shows OAuth ready
  */
 import { test, expect } from "@playwright/test";
 import { setupApp } from "./helpers/setup";
@@ -415,5 +418,77 @@ test.describe("mcp servers", () => {
     await expect(
       page.getByRole("button", { name: "Authorize with OAuth" }),
     ).toBeVisible();
+  });
+
+  test("MCP-18 Registration sends token_endpoint_auth_methods_supported from metadata", async ({ page }) => {
+    const ctrl = await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+        registration_endpoint: "https://auth.example.com/register",
+        token_endpoint_auth_methods_supported: ["client_secret_post"],
+      },
+      mcpOAuthClientId: "auto-id",
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page.getByPlaceholder("https://example.com/mcp").fill("https://mcp.figma.com/mcp");
+    await page.getByText("Detect Auth").click();
+    await expect(page.getByText("OAuth ready")).toBeVisible();
+
+    const regBody = ctrl.lastMcpRegister();
+    expect(regBody).not.toBeNull();
+    expect(regBody!.token_endpoint_auth_methods_supported).toEqual(["client_secret_post"]);
+  });
+
+  test("MCP-19 Registration failure shows error message", async ({ page }) => {
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+        registration_endpoint: "https://auth.example.com/register",
+      },
+      mcpOAuthRegError: true,
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page.getByPlaceholder("https://example.com/mcp").fill("https://mcp.example.com");
+    await page.getByText("Detect Auth").click();
+
+    // Should show OAuth required with error details
+    await expect(page.getByText("Auto-registration failed")).toBeVisible();
+    await expect(page.getByText(/403|Forbidden/)).toBeVisible();
+  });
+
+  test("MCP-20 Auto-registration with client_secret shows OAuth ready", async ({ page }) => {
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+        registration_endpoint: "https://auth.example.com/register",
+        token_endpoint_auth_methods_supported: ["client_secret_post"],
+      },
+      mcpOAuthClientId: "figma-client-id",
+      mcpOAuthClientSecret: "figma-client-secret",
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page.getByPlaceholder("https://example.com/mcp").fill("https://mcp.figma.com/mcp");
+    await page.getByText("Detect Auth").click();
+
+    await expect(page.getByText("OAuth ready")).toBeVisible();
+    await expect(page.getByText("Client registered automatically")).toBeVisible();
   });
 });
