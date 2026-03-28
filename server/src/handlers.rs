@@ -31,8 +31,8 @@ use tower_sessions::Session;
 use tracing::{error, info};
 use uuid::Uuid;
 use vm_lifecycle::{
-    VmEntry, VmRegistry, build_user_rootfs_path, build_vm_config, build_vm_config_without_iam,
-    ensure_user_rootfs, fetch_host_iam_credentials, find_user_rootfs,
+    VmEntry, VmRegistry, build_chroot_rootfs_path, build_vm_config, build_vm_config_without_iam,
+    ensure_chroot_rootfs, fetch_host_iam_credentials, find_user_rootfs,
 };
 
 use crate::{
@@ -42,7 +42,6 @@ use crate::{
     templates::render_terminal_page,
 };
 
-const LOCK_TIMEOUT_SECS: u64 = 30;
 const SFTP_OP_TIMEOUT_SECS: u64 = 30;
 
 #[derive(Serialize)]
@@ -302,7 +301,7 @@ pub(crate) async fn get_or_create_terminal(
     let Some(db_user) = get_user_by_email(&state.db, &user.email).await? else {
         return Ok(Redirect::to("/login").into_response());
     };
-    let has_user_rootfs = find_user_rootfs(&state.config.user_rootfs_dir, db_user.id).is_some();
+    let has_user_rootfs = find_user_rootfs(&state.config.jailer_chroot_base, db_user.id).is_some();
     let csrf_token = get_csrf_token(&session).await?;
     // Serve the page immediately with vm_id="" — the frontend will poll /api/vm-status
     Ok(Html(render_terminal_page(
@@ -326,7 +325,7 @@ pub(crate) async fn vm_status_handler(
 
     // Check if VM already exists
     if let Some(user_vm_info) = find_user_vm(&state.vms, user_id)? {
-        let has_user_rootfs = find_user_rootfs(&state.config.user_rootfs_dir, user_id).is_some();
+        let has_user_rootfs = find_user_rootfs(&state.config.jailer_chroot_base, user_id).is_some();
         return Ok(Json(serde_json::json!({
             "status": "ready",
             "vm_id": user_vm_info.vm_id,
@@ -477,20 +476,19 @@ async fn create_new_vm(state: &AppState, user_id: Uuid) -> Result<NewVm, AppErro
     // the caller; its Drop impl removes it (on success or error).
     let guard = acquire_provisioning_slot(state, user_id)?;
     info!("building vm config");
-    let user_rootfs = ensure_user_rootfs(
-        &state.config.user_rootfs_dir,
+    let user_rootfs = ensure_chroot_rootfs(
+        &state.config.jailer_chroot_base,
         &state.config.rootfs_path,
         user_id,
-        &state.rootfs_lock,
     )
     .await?;
     let vm_config = if state.config.use_iam_creds {
         let iam_creds = fetch_host_iam_credentials(&state.config.iam_role_name)
             .await
             .context("failed to fetch IAM credentials for VM")?;
-        build_vm_config(&state.config.to_vm_build_config(), &iam_creds, &user_rootfs)?
+        build_vm_config(&state.config.to_vm_build_config(), &iam_creds, &user_rootfs, user_id)?
     } else {
-        build_vm_config_without_iam(&state.config.to_vm_build_config(), &user_rootfs)
+        build_vm_config_without_iam(&state.config.to_vm_build_config(), &user_rootfs, user_id)
     };
     let vm = create_vm(&vm_config).await?;
     info!("vm started");
@@ -512,7 +510,7 @@ async fn build_terminal_response(
 ) -> Result<Response, AppError> {
     // Embed a CSRF token in the rendered terminal page
     let csrf_token = get_csrf_token(session).await?;
-    let has_user_rootfs = find_user_rootfs(&state.config.user_rootfs_dir, user_id).is_some();
+    let has_user_rootfs = find_user_rootfs(&state.config.jailer_chroot_base, user_id).is_some();
     Ok(Html(render_terminal_page(
         vm_id,
         &csrf_token,
@@ -529,21 +527,14 @@ pub(crate) async fn delete_user_rootfs_handler(
     let Some(db_user) = get_user_by_email(&state.db, &user.email).await? else {
         return Ok(Redirect::to("/login").into_response());
     };
-    let rootfs_path = build_user_rootfs_path(&state.config.user_rootfs_dir, db_user.id);
+    let rootfs_path = build_chroot_rootfs_path(&state.config.jailer_chroot_base, db_user.id);
     info!("deleting saved rootfs");
     remove_user_vm(&state.vms, db_user.id)?;
-    let _guard = timeout(
-        Duration::from_secs(LOCK_TIMEOUT_SECS),
-        state.rootfs_lock.lock(),
-    )
-    .await
-    .context("timed out waiting for rootfs lock")?;
     if let Err(e) = tokio::fs::remove_file(&rootfs_path).await
         && e.kind() != ErrorKind::NotFound
     {
         return Err(anyhow!(e).context("failed to delete user rootfs").into());
     }
-    drop(_guard);
     Ok(Redirect::to("/").into_response())
 }
 

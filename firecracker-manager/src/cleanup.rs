@@ -44,8 +44,12 @@ async fn delete_stale_chroot_dirs(chroot_base: &Path) {
     let Ok(mut entries) = fs::read_dir(&firecracker_dir).await else {
         return;
     };
+    // Clean up stale jail artifacts (socket, kernel) but preserve rootfs.ext4
+    // which persists across VM restarts.
     while let Ok(Some(entry)) = entries.next_entry().await {
-        let _ = fs::remove_dir_all(entry.path()).await;
+        let root_dir = entry.path().join("root");
+        let _ = fs::remove_file(root_dir.join("vmlinux")).await;
+        let _ = fs::remove_dir_all(root_dir.join("run")).await;
     }
 }
 

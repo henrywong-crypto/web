@@ -252,8 +252,6 @@ async fn serve_router(
     let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), serve_task).await;
     save_all_vm_rootfs(
         &app_state.vms,
-        &app_state.config.user_rootfs_dir,
-        &app_state.rootfs_lock,
     )
     .await?;
     Ok(())
@@ -267,8 +265,6 @@ fn spawn_idle_vm_sweep_task(app_state: AppState) -> tokio::task::JoinHandle<()> 
             interval.tick().await;
             sweep_idle_vms(
                 &app_state.vms,
-                &app_state.config.user_rootfs_dir,
-                &app_state.rootfs_lock,
             )
             .await;
         }

@@ -17,14 +17,12 @@ use tokio::time::timeout;
 use tracing::{error, info, warn};
 use url::Url;
 use uuid::Uuid;
-use vm_lifecycle::{VmEntry, build_user_rootfs_path};
 
 use crate::{
     handlers::UserVm,
     state::{AppError, AppState, update_vm_last_activity},
 };
 
-const LOCK_TIMEOUT_SECS: u64 = 30;
 const SEND_TIMEOUT_SECS: u64 = 30;
 
 pub(crate) async fn handle_ws_upgrade(
@@ -82,7 +80,7 @@ async fn run_terminal_session(
     }
 }
 
-async fn save_and_drop_vm(state: &AppState, vm_id: &str, user_id: Uuid) -> Result<()> {
+async fn save_and_drop_vm(state: &AppState, vm_id: &str, _user_id: Uuid) -> Result<()> {
     let vm_entry = {
         let mut registry = state
             .vms
@@ -91,32 +89,12 @@ async fn save_and_drop_vm(state: &AppState, vm_id: &str, user_id: Uuid) -> Resul
         registry.remove(vm_id)
     };
     if let Some(vm_entry) = vm_entry {
-        save_vm_rootfs_on_disconnect(state, user_id, vm_entry).await?;
+        // Stop the VM so the guest flushes its filesystem.
+        // The rootfs remains in the chroot — no copy needed.
+        info!("stopping vm on disconnect");
+        vm_entry.vm.stop().await;
     }
     Ok(())
-}
-
-async fn save_vm_rootfs_on_disconnect(
-    state: &AppState,
-    user_id: Uuid,
-    vm_entry: VmEntry,
-) -> Result<()> {
-    tokio::fs::create_dir_all(&state.config.user_rootfs_dir)
-        .await
-        .context("failed to create user rootfs dir on disconnect")?;
-    let user_rootfs = build_user_rootfs_path(&state.config.user_rootfs_dir, user_id);
-    let _guard = timeout(
-        Duration::from_secs(LOCK_TIMEOUT_SECS),
-        state.rootfs_lock.lock(),
-    )
-    .await
-    .context("timed out waiting for rootfs lock")?;
-    info!("saving rootfs on disconnect");
-    vm_entry
-        .vm
-        .save_rootfs(&user_rootfs)
-        .await
-        .context("failed to save rootfs")
 }
 
 async fn run_ssh_relay(

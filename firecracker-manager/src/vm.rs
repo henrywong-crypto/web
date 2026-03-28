@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use common::copy_sparse;
 use firecracker_client::{start_instance, stop_instance};
 use nix::{
     sys::signal::{Signal, kill},
@@ -14,7 +13,6 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use tokio::fs::rename;
 use tracing::{info, warn};
 
 use crate::{
@@ -88,23 +86,10 @@ impl Vm {
         self.chroot_dir.join("run/firecracker.socket")
     }
 
-    fn rootfs_copy(&self) -> PathBuf {
-        self.chroot_dir.join("rootfs.ext4")
-    }
-
-    pub async fn save_rootfs(&self, dest: &Path) -> Result<()> {
+    /// Gracefully stops the VM so the guest flushes its filesystem.
+    /// The rootfs remains in the chroot — no copy needed.
+    pub async fn stop(&self) {
         stop_vm(&self.socket_path(), self.pid).await;
-        let rootfs_copy = self.rootfs_copy();
-        if rename(&rootfs_copy, dest).await.is_err() {
-            // Use in-process copy so we inherit the server's file capabilities
-            // (CAP_DAC_READ_SEARCH, CAP_DAC_OVERRIDE). Spawned child processes
-            // like `cp` do not inherit these and will get Permission Denied on
-            // jailer-owned files.
-            tokio::fs::copy(&rootfs_copy, dest)
-                .await
-                .with_context(|| format!("failed to copy rootfs to {}", dest.display()))?;
-        }
-        Ok(())
     }
 }
 
@@ -117,7 +102,9 @@ impl Drop for Vm {
         let _ = std::process::Command::new(&self.net_helper_path)
             .args(["tap-delete", &tap_name])
             .status();
-        let _ = std::fs::remove_dir_all(&self.chroot_dir);
+        // Clean up chroot artifacts but preserve the rootfs
+        let _ = std::fs::remove_file(self.chroot_dir.join("vmlinux"));
+        let _ = std::fs::remove_dir_all(self.chroot_dir.join("run"));
         release_net_idx(self.net_idx);
     }
 }
@@ -154,29 +141,11 @@ pub async fn create_vm(vm_config: &VmConfig) -> Result<Vm> {
     if result.is_err() {
         delete_tap(&vm_config.net_helper_path, &tap_name).await;
         release_net_idx(net_idx);
-        let _ = tokio::fs::remove_dir_all(&chroot_dir).await;
+        // Clean up chroot artifacts but preserve the rootfs
+        let _ = tokio::fs::remove_file(chroot_dir.join("vmlinux")).await;
+        let _ = tokio::fs::remove_dir_all(chroot_dir.join("run")).await;
     }
     result
-}
-
-async fn prepare_vm_rootfs(
-    source_rootfs: &Path,
-    rootfs_copy: &Path,
-    jailer: &JailerConfig,
-) -> Result<()> {
-    info!("copying rootfs");
-    copy_sparse(source_rootfs, rootfs_copy).await?;
-    // Set permissions before chown — after chown the file is owned by the jailer
-    // user and chmod would require CAP_FOWNER which the server doesn't have.
-    std::fs::set_permissions(rootfs_copy, Permissions::from_mode(0o644))
-        .context("failed to set rootfs permissions")?;
-    nix::unistd::chown(
-        rootfs_copy,
-        Some(Uid::from_raw(jailer.uid)),
-        Some(Gid::from_raw(jailer.gid)),
-    )
-    .context("failed to chown rootfs copy for jailer")?;
-    Ok(())
 }
 
 async fn launch_vm(
@@ -195,11 +164,19 @@ async fn launch_vm(
     let boot_args = build_vm_boot_args(&vm_config.boot_args, &format_guest_ip(net_idx), net_idx);
     let kernel_path_in_jail = PathBuf::from("/vmlinux");
     let rootfs_path_in_jail = PathBuf::from("/rootfs.ext4");
-    let rootfs_copy = chroot_dir.join("rootfs.ext4");
     let socket_path = chroot_dir.join("run/firecracker.socket");
 
     prepare_jail_resources(chroot_dir, &vm_config.kernel_path).await?;
-    prepare_vm_rootfs(&vm_config.rootfs_path, &rootfs_copy, &vm_config.jailer).await?;
+    // Set rootfs permissions for the jailer user (rootfs is already in the chroot)
+    let rootfs_in_chroot = chroot_dir.join("rootfs.ext4");
+    std::fs::set_permissions(&rootfs_in_chroot, Permissions::from_mode(0o644))
+        .context("failed to set rootfs permissions")?;
+    nix::unistd::chown(
+        &rootfs_in_chroot,
+        Some(Uid::from_raw(vm_config.jailer.uid)),
+        Some(Gid::from_raw(vm_config.jailer.gid)),
+    )
+    .context("failed to chown rootfs for jailer")?;
     let child = spawn_firecracker_jailed(&vm_config.id, &vm_config.jailer)?;
     let pid = child
         .id()

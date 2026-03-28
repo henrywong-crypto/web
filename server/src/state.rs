@@ -13,7 +13,6 @@ use std::{
     time::Instant,
 };
 use store::PgPool;
-use tokio::sync::Mutex as AsyncMutex;
 use tracing::error;
 use uuid::Uuid;
 use vm_lifecycle::{VmBuildConfig, VmRegistry};
@@ -67,8 +66,6 @@ pub(crate) struct AppConfig {
     pub(crate) gateway_tls_accept_invalid_certs: bool,
     #[serde(default)]
     pub(crate) gateway_identity_provider: String,
-    #[serde(default = "default_user_rootfs_dir")]
-    pub(crate) user_rootfs_dir: PathBuf,
     #[serde(default = "default_upload_dir")]
     pub(crate) upload_dir: PathBuf,
     #[serde(default = "default_database_url")]
@@ -130,9 +127,6 @@ fn default_vm_host_key_path() -> PathBuf {
 }
 fn default_cognito_redirect_uri() -> String {
     "http://localhost:3000/callback".to_string()
-}
-fn default_user_rootfs_dir() -> PathBuf {
-    PathBuf::from("/home/ubuntu/fc-users")
 }
 fn default_upload_dir() -> PathBuf {
     PathBuf::from("/home/ubuntu")
@@ -212,7 +206,6 @@ pub(crate) struct AppState {
     pub(crate) db: PgPool,
     pub(crate) vms: VmRegistry,
     pub(crate) provisioning_users: Arc<Mutex<HashSet<Uuid>>>,
-    pub(crate) rootfs_lock: Arc<AsyncMutex<()>>,
     pub(crate) static_assets: Arc<StaticAssets>,
 }
 
@@ -223,7 +216,6 @@ impl AppState {
             db: pg_pool,
             vms: Arc::new(Mutex::new(HashMap::new())),
             provisioning_users: Arc::new(Mutex::new(HashSet::new())),
-            rootfs_lock: Arc::new(AsyncMutex::new(())),
             static_assets: Arc::new(static_assets),
         }
     }
