@@ -160,3 +160,13 @@ pub async fn open_direct_streamlocal_channel(
     .context("direct-streamlocal channel open timed out")?
     .with_context(|| format!("failed to open direct-streamlocal channel to {socket_path}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ssh_connect_timeout_is_10_seconds() {
+        assert_eq!(SSH_CONNECT_TIMEOUT_SECS, 10);
+    }
+}

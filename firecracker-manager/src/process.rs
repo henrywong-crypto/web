@@ -94,6 +94,62 @@ mod tests {
         let dir = build_chroot_dir(Path::new("/tmp"), "test-vm");
         assert_eq!(dir, PathBuf::from("/tmp/firecracker/test-vm/root"));
     }
+
+    #[tokio::test]
+    async fn prepare_jail_resources_copies_kernel() {
+        let tmp = std::env::temp_dir().join("test_prepare_copies");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let chroot = tmp.join("chroot");
+        let kernel_src = tmp.join("vmlinux-src");
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(&kernel_src, b"ELF_KERNEL_DATA").unwrap();
+
+        prepare_jail_resources(&chroot, &kernel_src).await.unwrap();
+
+        assert!(chroot.join("run").is_dir());
+        assert_eq!(
+            std::fs::read(chroot.join("vmlinux")).unwrap(),
+            b"ELF_KERNEL_DATA"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[tokio::test]
+    async fn prepare_jail_resources_skips_copy_when_kernel_exists() {
+        let tmp = std::env::temp_dir().join("test_prepare_skip");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let chroot = tmp.join("chroot");
+        let kernel_src = tmp.join("vmlinux-src");
+        std::fs::create_dir_all(&chroot).unwrap();
+        std::fs::write(&kernel_src, b"NEW_KERNEL").unwrap();
+        std::fs::write(chroot.join("vmlinux"), b"EXISTING_KERNEL").unwrap();
+
+        prepare_jail_resources(&chroot, &kernel_src).await.unwrap();
+
+        assert_eq!(
+            std::fs::read(chroot.join("vmlinux")).unwrap(),
+            b"EXISTING_KERNEL"
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[tokio::test]
+    async fn prepare_jail_resources_creates_run_dir() {
+        let tmp = std::env::temp_dir().join("test_prepare_run");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let chroot = tmp.join("chroot");
+        let kernel_src = tmp.join("vmlinux-src");
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(&kernel_src, b"K").unwrap();
+
+        prepare_jail_resources(&chroot, &kernel_src).await.unwrap();
+
+        assert!(chroot.join("run").is_dir());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
 }
 
 // Prepares the jail directory. Layout on disk (chroot_dir = <chroot_base>/firecracker/<vm_id>/root/):

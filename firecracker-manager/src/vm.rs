@@ -108,7 +108,7 @@ impl Drop for Vm {
 }
 
 /// Removes everything in the chroot directory except rootfs.ext4 and vmlinux.
-fn cleanup_chroot(chroot_dir: &Path) {
+pub(crate) fn cleanup_chroot(chroot_dir: &Path) {
     let Ok(entries) = std::fs::read_dir(chroot_dir) else {
         return;
     };
@@ -216,4 +216,65 @@ async fn launch_vm(
         net_helper_path: vm_config.net_helper_path.clone(),
         chroot_dir: chroot_dir.to_path_buf(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cleanup_chroot_preserves_rootfs_and_vmlinux() {
+        let tmp = std::env::temp_dir().join("test_cleanup_preserve");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+        std::fs::write(tmp.join("rootfs.ext4"), b"rootfs").unwrap();
+        std::fs::write(tmp.join("vmlinux"), b"kernel").unwrap();
+        std::fs::write(tmp.join("other.file"), b"x").unwrap();
+        std::fs::create_dir_all(tmp.join("subdir")).unwrap();
+
+        cleanup_chroot(&tmp);
+
+        assert!(tmp.join("rootfs.ext4").exists());
+        assert!(tmp.join("vmlinux").exists());
+        assert!(!tmp.join("other.file").exists());
+        assert!(!tmp.join("subdir").exists());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn cleanup_chroot_removes_dev_and_run_dirs() {
+        let tmp = std::env::temp_dir().join("test_cleanup_dev_run");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(tmp.join("dev/net")).unwrap();
+        std::fs::write(tmp.join("dev/net/tun"), b"").unwrap();
+        std::fs::create_dir_all(tmp.join("run")).unwrap();
+        std::fs::write(tmp.join("run/firecracker.socket"), b"").unwrap();
+
+        cleanup_chroot(&tmp);
+
+        assert!(!tmp.join("dev").exists());
+        assert!(!tmp.join("run").exists());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn cleanup_chroot_handles_empty_dir() {
+        let tmp = std::env::temp_dir().join("test_cleanup_empty");
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        cleanup_chroot(&tmp); // should not panic
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn cleanup_chroot_handles_missing_dir() {
+        let tmp = std::env::temp_dir().join("test_cleanup_missing_nonexistent");
+        let _ = std::fs::remove_dir_all(&tmp);
+
+        cleanup_chroot(&tmp); // should not panic
+    }
 }
