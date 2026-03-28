@@ -39,16 +39,6 @@ fn generate_state() -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
-/// Extract the base URL (scheme + host + port) from an MCP server URL.
-fn base_url(mcp_url: &str) -> Result<String, url::ParseError> {
-    let parsed = Url::parse(mcp_url)?;
-    let mut base = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
-    if let Some(port) = parsed.port() {
-        base.push_str(&format!(":{port}"));
-    }
-    Ok(base)
-}
-
 /// Extract origin (scheme + host + port) and path component from a URL.
 /// Path has trailing slash stripped. Returns (origin, path) where path may be empty.
 fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
@@ -450,13 +440,13 @@ pub(crate) async fn callback_handler(
 
     // Find user's VM to write the config
     let user_email = session
-        .get::<String>("user_email")
+        .get::<String>("email")
         .await
         .ok()
         .flatten();
 
     if user_email.is_none() {
-        error!("mcp oauth callback: no user_email in session — cannot write MCP server config");
+        error!("mcp oauth callback: no email in session — cannot write MCP server config");
         return Ok(Redirect::to("/?mcp_oauth=error&reason=no_session").into_response());
     }
 
@@ -598,45 +588,6 @@ mod tests {
         let s1 = generate_state();
         let s2 = generate_state();
         assert_ne!(s1, s2);
-    }
-
-    // ── base_url tests ──────────────────────────────────────────────────
-
-    #[test]
-    fn base_url_strips_path() {
-        assert_eq!(
-            base_url("https://api.example.com/v1/mcp").unwrap(),
-            "https://api.example.com"
-        );
-    }
-
-    #[test]
-    fn base_url_preserves_port() {
-        assert_eq!(
-            base_url("https://localhost:8443/mcp").unwrap(),
-            "https://localhost:8443"
-        );
-    }
-
-    #[test]
-    fn base_url_handles_no_path() {
-        assert_eq!(
-            base_url("https://mcp.figma.com").unwrap(),
-            "https://mcp.figma.com"
-        );
-    }
-
-    #[test]
-    fn base_url_rejects_invalid_url() {
-        assert!(base_url("not a url").is_err());
-    }
-
-    #[test]
-    fn base_url_strips_query_and_fragment() {
-        assert_eq!(
-            base_url("https://example.com/mcp?key=val#frag").unwrap(),
-            "https://example.com"
-        );
     }
 
     // ── origin_and_path tests ──────────────────────────────────────────
