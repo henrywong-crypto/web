@@ -454,6 +454,12 @@ pub(crate) async fn callback_handler(
         .await
         .ok()
         .flatten();
+
+    if user_email.is_none() {
+        error!("mcp oauth callback: no user_email in session — cannot write MCP server config");
+        return Ok(Redirect::to("/?mcp_oauth=error&reason=no_session").into_response());
+    }
+
     let user_id = if let Some(email) = &user_email {
         store::get_user_by_email(&state.db, email)
             .await
@@ -464,43 +470,63 @@ pub(crate) async fn callback_handler(
         None
     };
 
-    if let Some(user_id) = user_id {
-        if let Ok(Some(vm_info)) = find_user_vm(&state.vms, user_id) {
-            // Read current ~/.claude.json from VM
-            let raw = get_vm_claude_json_raw(
-                vm_info.guest_ip,
-                &state.config.ssh_key_path,
-                &state.config.ssh_user,
-                &state.config.vm_host_key_path,
-            )
-            .await
-            .unwrap_or_else(|_| "{}".to_string());
+    let Some(user_id) = user_id else {
+        error!("mcp oauth callback: user not found in DB for email {:?}", user_email);
+        return Ok(Redirect::to("/?mcp_oauth=error&reason=user_not_found").into_response());
+    };
 
-            // Build MCP server entry with OAuth token
-            let mut server = serde_json::json!({
-                "type": "http",
-                "url": mcp_url,
-                "headers": {
-                    "Authorization": format!("Bearer {}", tokens.access_token),
-                },
-            });
-            if let Some(ref refresh) = tokens.refresh_token {
-                server["_refresh_token"] = serde_json::Value::String(refresh.clone());
-            }
-
-            // Upsert and write back
-            if let Ok(updated) = upsert_mcp_server(raw.trim(), &server_name, server) {
-                let _ = set_vm_claude_json(
-                    vm_info.guest_ip,
-                    &state.config.ssh_key_path,
-                    &state.config.ssh_user,
-                    &state.config.vm_host_key_path,
-                    &updated,
-                )
-                .await;
-            }
+    let vm_info = match find_user_vm(&state.vms, user_id) {
+        Ok(Some(vm)) => vm,
+        Ok(None) => {
+            error!("mcp oauth callback: no VM found for user {user_id}");
+            return Ok(Redirect::to("/?mcp_oauth=error&reason=no_vm").into_response());
         }
+        Err(e) => {
+            error!("mcp oauth callback: failed to find VM for user {user_id}: {e}");
+            return Ok(Redirect::to("/?mcp_oauth=error&reason=vm_error").into_response());
+        }
+    };
+
+    // Read current ~/.claude.json from VM
+    let raw = get_vm_claude_json_raw(
+        vm_info.guest_ip,
+        &state.config.ssh_key_path,
+        &state.config.ssh_user,
+        &state.config.vm_host_key_path,
+    )
+    .await
+    .unwrap_or_else(|_| "{}".to_string());
+
+    // Build MCP server entry with OAuth token
+    let mut server = serde_json::json!({
+        "type": "http",
+        "url": mcp_url,
+        "headers": {
+            "Authorization": format!("Bearer {}", tokens.access_token),
+        },
+    });
+    if let Some(ref refresh) = tokens.refresh_token {
+        server["_refresh_token"] = serde_json::Value::String(refresh.clone());
     }
+
+    // Upsert and write back
+    let updated = upsert_mcp_server(raw.trim(), &server_name, server)
+        .map_err(|e| anyhow::anyhow!("failed to upsert MCP server config: {e}"))?;
+
+    if let Err(e) = set_vm_claude_json(
+        vm_info.guest_ip,
+        &state.config.ssh_key_path,
+        &state.config.ssh_user,
+        &state.config.vm_host_key_path,
+        &updated,
+    )
+    .await
+    {
+        error!("mcp oauth callback: failed to write ~/.claude.json to VM: {e}");
+        return Ok(Redirect::to("/?mcp_oauth=error&reason=write_failed").into_response());
+    }
+
+    info!("mcp oauth: successfully wrote server '{server_name}' config to VM");
 
     Ok(Redirect::to("/?mcp_oauth=success").into_response())
 }

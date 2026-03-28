@@ -67,6 +67,7 @@ function AppContent() {
   const [showFilesPanel, setShowFilesPanel] = useState(false);
   const terminalRef = useRef<TerminalHandle>(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [mcpOAuthResult, setMcpOAuthResult] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem("ui-theme");
     return saved ? saved === "dark" : true;
@@ -75,6 +76,35 @@ function AppContent() {
   React.useEffect(() => {
     sessionStorage.setItem("active-tab", activeTab);
   }, [activeTab]);
+
+  // Handle MCP OAuth callback result from URL params
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const result = params.get("mcp_oauth");
+    if (result) {
+      const reason = params.get("reason");
+      if (result === "success") {
+        setMcpOAuthResult("MCP server connected successfully via OAuth.");
+        setShowSettings(true);
+      } else {
+        const messages: Record<string, string> = {
+          no_session: "OAuth failed: session expired. Please try again.",
+          user_not_found: "OAuth failed: user not found.",
+          no_vm: "OAuth failed: no VM found for your account.",
+          vm_error: "OAuth failed: could not reach your VM.",
+          write_failed: "OAuth failed: could not write config to VM.",
+        };
+        setMcpOAuthResult(
+          reason ? messages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
+        );
+      }
+      // Clean up URL params
+      params.delete("mcp_oauth");
+      params.delete("reason");
+      const clean = params.toString();
+      window.history.replaceState({}, "", clean ? `/?${clean}` : "/");
+    }
+  }, []);
 
   React.useEffect(() => {
     if (darkMode) {
@@ -206,6 +236,26 @@ function AppContent() {
             </div>
           </main>
         </>
+      )}
+
+      {mcpOAuthResult && (
+        <div
+          className={`fixed top-4 right-4 z-[60] max-w-sm rounded-lg border px-4 py-3 shadow-lg ${
+            mcpOAuthResult.includes("successfully")
+              ? "border-emerald-500/30 bg-emerald-950/90 text-emerald-200"
+              : "border-red-500/30 bg-red-950/90 text-red-200"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <p className="text-sm">{mcpOAuthResult}</p>
+            <button
+              onClick={() => setMcpOAuthResult(null)}
+              className="mt-0.5 text-xs opacity-60 hover:opacity-100"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
       )}
 
       {showSettings && (
