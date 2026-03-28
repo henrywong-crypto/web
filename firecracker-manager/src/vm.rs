@@ -102,8 +102,6 @@ impl Drop for Vm {
         let _ = std::process::Command::new(&self.net_helper_path)
             .args(["tap-delete", &tap_name])
             .status();
-        // Clean up all chroot artifacts but preserve rootfs.ext4
-        cleanup_chroot(&self.chroot_dir);
         release_net_idx(self.net_idx);
     }
 }

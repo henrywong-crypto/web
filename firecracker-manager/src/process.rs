@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    fs::{copy, create_dir_all, hard_link},
+    fs::{copy, create_dir_all},
     process::{Child, Command},
     time::{sleep, timeout},
 };
@@ -105,14 +105,12 @@ mod tests {
 pub(crate) async fn prepare_jail_resources(chroot_dir: &Path, kernel_src: &Path) -> Result<()> {
     create_dir_all(chroot_dir.join("run")).await?;
     let kernel_dst = chroot_dir.join("vmlinux");
-    if hard_link(kernel_src, &kernel_dst).await.is_err() {
-        copy(kernel_src, &kernel_dst).await.with_context(|| {
-            format!(
-                "failed to copy kernel from {} to {}",
-                kernel_src.display(),
-                kernel_dst.display()
-            )
-        })?;
-    }
+    copy(kernel_src, &kernel_dst).await.with_context(|| {
+        format!(
+            "failed to copy kernel from {} to {}",
+            kernel_src.display(),
+            kernel_dst.display()
+        )
+    })?;
     Ok(())
 }

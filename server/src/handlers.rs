@@ -353,16 +353,30 @@ pub(crate) async fn vm_status_handler(
                 // Write settings before registering so the VM is not visible
                 // as "ready" until the API key / bedrock config is in place.
                 // Retry a few times in case the VM's SSH is not ready yet.
-                for _ in 0..5 {
-                    let result = if let Some(ref key) = gateway_key {
-                        write_gateway_settings_with_key(&state_clone, new_vm.guest_ip, key).await
-                    } else {
-                        write_bedrock_settings(&state_clone, new_vm.guest_ip).await
-                    };
-                    if result.is_ok() {
-                        break;
-                    }
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                // Wrap the whole loop in a timeout so we don't block
+                // registration for too long if SSH is unreachable.
+                let settings_result = tokio::time::timeout(
+                    tokio::time::Duration::from_secs(30),
+                    async {
+                        for attempt in 0..5 {
+                            let result = if let Some(ref key) = gateway_key {
+                                write_gateway_settings_with_key(&state_clone, new_vm.guest_ip, key).await
+                            } else {
+                                write_bedrock_settings(&state_clone, new_vm.guest_ip).await
+                            };
+                            if result.is_ok() {
+                                return Ok(());
+                            }
+                            if attempt < 4 {
+                                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                            }
+                        }
+                        Err(())
+                    },
+                )
+                .await;
+                if settings_result.is_err() || matches!(settings_result, Ok(Err(()))) {
+                    error!("timed out or failed writing VM settings, registering VM anyway");
                 }
                 if register_vm(
                     &state_clone.vms,
