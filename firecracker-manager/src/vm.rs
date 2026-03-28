@@ -102,10 +102,27 @@ impl Drop for Vm {
         let _ = std::process::Command::new(&self.net_helper_path)
             .args(["tap-delete", &tap_name])
             .status();
-        // Clean up chroot artifacts but preserve the rootfs
-        let _ = std::fs::remove_file(self.chroot_dir.join("vmlinux"));
-        let _ = std::fs::remove_dir_all(self.chroot_dir.join("run"));
+        // Clean up all chroot artifacts but preserve rootfs.ext4
+        cleanup_chroot(&self.chroot_dir);
         release_net_idx(self.net_idx);
+    }
+}
+
+/// Removes everything in the chroot directory except rootfs.ext4.
+fn cleanup_chroot(chroot_dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(chroot_dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if entry.file_name() == "rootfs.ext4" {
+            continue;
+        }
+        let path = entry.path();
+        if path.is_dir() {
+            let _ = std::fs::remove_dir_all(&path);
+        } else {
+            let _ = std::fs::remove_file(&path);
+        }
     }
 }
 
@@ -141,9 +158,7 @@ pub async fn create_vm(vm_config: &VmConfig) -> Result<Vm> {
     if result.is_err() {
         delete_tap(&vm_config.net_helper_path, &tap_name).await;
         release_net_idx(net_idx);
-        // Clean up chroot artifacts but preserve the rootfs
-        let _ = tokio::fs::remove_file(chroot_dir.join("vmlinux")).await;
-        let _ = tokio::fs::remove_dir_all(chroot_dir.join("run")).await;
+        cleanup_chroot(&chroot_dir);
     }
     result
 }
