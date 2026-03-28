@@ -278,7 +278,8 @@ pub(crate) async fn register_handler(
         .map_err(|e| anyhow::anyhow!("failed to build HTTP client: {e}"))?;
 
     // Pick token_endpoint_auth_method based on what the server supports.
-    // Prefer client_secret_post (like Figma), fall back to none (pure PKCE).
+    // Default to client_secret_post (most common for MCP servers like Figma).
+    // RFC 8414 says the default is client_secret_basic when not specified.
     let auth_method = body
         .token_endpoint_auth_methods_supported
         .as_ref()
@@ -291,7 +292,7 @@ pub(crate) async fn register_handler(
             }
             methods.first().cloned()
         })
-        .unwrap_or_else(|| "none".to_string());
+        .unwrap_or_else(|| "client_secret_post".to_string());
 
     let mut reg_request = serde_json::json!({
         "client_name": body.client_name,
