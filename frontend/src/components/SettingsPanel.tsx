@@ -560,7 +560,7 @@ function McpServersSection({
       if (!startRes.ok) throw new Error((await startRes.text()) || `HTTP ${startRes.status}`);
       const startData = await startRes.json();
       if (startData.redirect) {
-        window.location.href = startData.redirect;
+        window.open(startData.redirect, "_blank", "noopener,noreferrer");
       }
     } catch (err) {
       setSaveError(String(err));

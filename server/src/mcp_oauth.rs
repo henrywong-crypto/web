@@ -15,8 +15,8 @@ use tracing::{error, info};
 use url::Url;
 
 use crate::{
-    auth::User,
-    state::{AppError, AppState, find_user_vm},
+    handlers::UserVm,
+    state::{AppError, AppState},
 };
 
 // ── PKCE helpers ─────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ pub(crate) async fn start_handler(
 /// Handle the OAuth callback: validate state, exchange code for token, store MCP server config.
 pub(crate) async fn callback_handler(
     query: Query<OAuthCallbackQuery>,
-    _user: User,
+    user_vm: UserVm,
     session: Session,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
@@ -438,48 +438,9 @@ pub(crate) async fn callback_handler(
 
     info!("mcp oauth token exchange successful for server: {server_name}");
 
-    // Find user's VM to write the config
-    let user_email = session
-        .get::<String>("email")
-        .await
-        .ok()
-        .flatten();
-
-    if user_email.is_none() {
-        error!("mcp oauth callback: no email in session — cannot write MCP server config");
-        return Ok(Redirect::to("/?mcp_oauth=error&reason=no_session").into_response());
-    }
-
-    let user_id = if let Some(email) = &user_email {
-        store::get_user_by_email(&state.db, email)
-            .await
-            .ok()
-            .flatten()
-            .map(|u| u.id)
-    } else {
-        None
-    };
-
-    let Some(user_id) = user_id else {
-        error!("mcp oauth callback: user not found in DB for email {:?}", user_email);
-        return Ok(Redirect::to("/?mcp_oauth=error&reason=user_not_found").into_response());
-    };
-
-    let vm_info = match find_user_vm(&state.vms, user_id) {
-        Ok(Some(vm)) => vm,
-        Ok(None) => {
-            error!("mcp oauth callback: no VM found for user {user_id}");
-            return Ok(Redirect::to("/?mcp_oauth=error&reason=no_vm").into_response());
-        }
-        Err(e) => {
-            error!("mcp oauth callback: failed to find VM for user {user_id}: {e}");
-            return Ok(Redirect::to("/?mcp_oauth=error&reason=vm_error").into_response());
-        }
-    };
-
-    // Read current ~/.claude.json from VM
+    // Read current ~/.claude.json from VM (UserVm extractor handles auth + VM provisioning)
     let raw = get_vm_claude_json_raw(
-        vm_info.guest_ip,
+        user_vm.guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
         &state.config.vm_host_key_path,
@@ -504,7 +465,7 @@ pub(crate) async fn callback_handler(
         .map_err(|e| anyhow::anyhow!("failed to upsert MCP server config: {e}"))?;
 
     if let Err(e) = set_vm_claude_json(
-        vm_info.guest_ip,
+        user_vm.guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
         &state.config.vm_host_key_path,
