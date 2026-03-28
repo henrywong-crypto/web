@@ -13,7 +13,7 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::{
     configure::configure_vm,
