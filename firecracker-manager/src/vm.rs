@@ -96,7 +96,11 @@ impl Vm {
 impl Drop for Vm {
     fn drop(&mut self) {
         if let Ok(raw_pid) = i32::try_from(self.pid) {
-            let _ = kill(Pid::from_raw(raw_pid), Signal::SIGTERM);
+            // Kill the process group so both the jailer/sudo wrapper and the
+            // firecracker child are terminated. Using the negative PID sends
+            // the signal to the entire process group.
+            let _ = kill(Pid::from_raw(-raw_pid), Signal::SIGKILL);
+            let _ = kill(Pid::from_raw(raw_pid), Signal::SIGKILL);
         }
         let tap_name = format_tap_name(self.net_idx);
         let _ = std::process::Command::new(&self.net_helper_path)
@@ -133,10 +137,12 @@ async fn stop_vm(socket_path: &Path, pid: u32) {
     if tokio::time::timeout(Duration::from_secs(10), wait_for_process_exit(pid))
         .await
         .is_err()
-        && let Ok(raw_pid) = i32::try_from(pid)
-        && let Err(_) = kill(Pid::from_raw(raw_pid), Signal::SIGKILL)
     {
-        warn!("failed to SIGKILL process {pid}");
+        if let Ok(raw_pid) = i32::try_from(pid) {
+            // Kill the entire process group (sudo + jailer + firecracker)
+            let _ = kill(Pid::from_raw(-raw_pid), Signal::SIGKILL);
+            let _ = kill(Pid::from_raw(raw_pid), Signal::SIGKILL);
+        }
     }
 }
 

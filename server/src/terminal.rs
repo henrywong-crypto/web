@@ -89,10 +89,13 @@ async fn save_and_drop_vm(state: &AppState, vm_id: &str, _user_id: Uuid) -> Resu
         registry.remove(vm_id)
     };
     if let Some(vm_entry) = vm_entry {
-        // Stop the VM so the guest flushes its filesystem.
-        // The rootfs remains in the chroot — no copy needed.
         info!("stopping vm on disconnect");
+        // Stop the VM and wait for the process to fully exit before
+        // dropping. This ensures cleanup_chroot + release_net_idx in
+        // Vm::Drop run before a new VM can be provisioned for the same
+        // user (preventing "Text file busy" and tap index conflicts).
         vm_entry.vm.stop().await;
+        drop(vm_entry);
     }
     Ok(())
 }
