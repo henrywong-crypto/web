@@ -402,6 +402,7 @@ function McpServersSection({
     token_endpoint: string;
     registration_endpoint?: string;
     scopes_supported?: string[];
+    token_endpoint_auth_methods_supported?: string[];
   } | null>(null);
   const [oauthClientId, setOauthClientId] = useState("");
   const [oauthClientSecret, setOauthClientSecret] = useState("");
@@ -483,6 +484,8 @@ function McpServersSection({
                 client_name: "Claude Web",
                 redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
                 scope: data.metadata.scopes_supported?.join(" ") ?? undefined,
+                token_endpoint_auth_methods_supported:
+                  data.metadata.token_endpoint_auth_methods_supported ?? undefined,
               }),
             });
             if (regRes.ok) {
@@ -520,6 +523,8 @@ function McpServersSection({
           client_name: "Claude Web",
           redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
           scope: oauthMetadata.scopes_supported?.join(" ") ?? undefined,
+          token_endpoint_auth_methods_supported:
+            oauthMetadata.token_endpoint_auth_methods_supported ?? undefined,
         }),
       });
       if (!regRes.ok) {

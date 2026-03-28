@@ -3,7 +3,7 @@ use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
-    response::{IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Response},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chat_settings::{get_vm_claude_json_raw, set_vm_claude_json, upsert_mcp_server};
@@ -79,6 +79,26 @@ fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) ->
     }
 }
 
+/// Return an HTML page that posts the OAuth result to the opener window and closes itself.
+fn oauth_close_page(result: &str, reason: Option<&str>) -> Response {
+    let reason_param = reason.map(|r| format!("&reason={r}")).unwrap_or_default();
+    Html(format!(
+        r#"<!DOCTYPE html><html><head><title>OAuth</title></head><body>
+<script>
+if (window.opener) {{
+    window.opener.postMessage({{ type: "mcp_oauth", result: "{result}"{reason_js} }}, window.location.origin);
+    window.close();
+}} else {{
+    window.location.href = "/?mcp_oauth={result}{reason_param}";
+}}
+</script>
+<p>Completing OAuth… you can close this tab.</p>
+</body></html>"#,
+        reason_js = reason.map(|r| format!(r#", reason: "{r}""#)).unwrap_or_default(),
+    ))
+    .into_response()
+}
+
 // ── Types ────────────────────────────────────────────────────────────────
 
 /// OAuth 2.0 Authorization Server Metadata (subset we care about).
@@ -124,6 +144,9 @@ pub(crate) struct RegisterBody {
     redirect_uri: String,
     #[serde(default)]
     scope: Option<String>,
+    /// From the server's metadata — used to pick the right auth method.
+    #[serde(default)]
+    token_endpoint_auth_methods_supported: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -236,12 +259,28 @@ pub(crate) async fn register_handler(
         .build()
         .map_err(|e| anyhow::anyhow!("failed to build HTTP client: {e}"))?;
 
+    // Pick token_endpoint_auth_method based on what the server supports.
+    // Prefer client_secret_post (like Figma), fall back to none (pure PKCE).
+    let auth_method = body
+        .token_endpoint_auth_methods_supported
+        .as_ref()
+        .and_then(|methods| {
+            // Prefer in order: client_secret_post, client_secret_basic, none
+            for preferred in &["client_secret_post", "client_secret_basic", "none"] {
+                if methods.iter().any(|m| m == preferred) {
+                    return Some(preferred.to_string());
+                }
+            }
+            methods.first().cloned()
+        })
+        .unwrap_or_else(|| "none".to_string());
+
     let mut reg_request = serde_json::json!({
         "client_name": body.client_name,
         "redirect_uris": [body.redirect_uri],
         "grant_types": ["authorization_code", "refresh_token"],
         "response_types": ["code"],
-        "token_endpoint_auth_method": "none",
+        "token_endpoint_auth_method": auth_method,
     });
     if let Some(ref scope) = body.scope {
         reg_request["scope"] = serde_json::Value::String(scope.clone());
@@ -361,7 +400,7 @@ pub(crate) async fn callback_handler(
 
     if stored_state.as_deref() != Some(&query.state) {
         error!("mcp oauth state mismatch");
-        return Ok(Redirect::to("/?mcp_oauth=error").into_response());
+        return Ok(oauth_close_page("error", Some("state_mismatch")));
     }
 
     // Retrieve session data
@@ -428,7 +467,7 @@ pub(crate) async fn callback_handler(
         let status = token_resp.status();
         let body = token_resp.text().await.unwrap_or_default();
         error!("token exchange failed: {status} {body}");
-        return Ok(Redirect::to("/?mcp_oauth=error").into_response());
+        return Ok(oauth_close_page("error", Some("token_exchange")));
     }
 
     let tokens: TokenResponse = token_resp
@@ -474,12 +513,12 @@ pub(crate) async fn callback_handler(
     .await
     {
         error!("mcp oauth callback: failed to write ~/.claude.json to VM: {e}");
-        return Ok(Redirect::to("/?mcp_oauth=error&reason=write_failed").into_response());
+        return Ok(oauth_close_page("error", Some("write_failed")));
     }
 
     info!("mcp oauth: successfully wrote server '{server_name}' config to VM");
 
-    Ok(Redirect::to("/?mcp_oauth=success").into_response())
+    Ok(oauth_close_page("success", None))
 }
 
 #[cfg(test)]

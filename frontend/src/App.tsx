@@ -77,8 +77,31 @@ function AppContent() {
     sessionStorage.setItem("active-tab", activeTab);
   }, [activeTab]);
 
-  // Handle MCP OAuth callback result from URL params
+  // Handle MCP OAuth callback result from popup postMessage (or URL params as fallback)
   React.useEffect(() => {
+    const messages: Record<string, string> = {
+      state_mismatch: "OAuth failed: state mismatch. Please try again.",
+      token_exchange: "OAuth failed: token exchange failed.",
+      write_failed: "OAuth failed: could not write config to VM.",
+    };
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "mcp_oauth") return;
+      const { result, reason } = event.data;
+      if (result === "success") {
+        setMcpOAuthResult("MCP server connected successfully via OAuth.");
+        setShowSettings(true);
+      } else {
+        setMcpOAuthResult(
+          reason ? messages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
+        );
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+
+    // Fallback: handle URL params if popup couldn't use postMessage (e.g. direct navigation)
     const params = new URLSearchParams(window.location.search);
     const result = params.get("mcp_oauth");
     if (result) {
@@ -87,23 +110,17 @@ function AppContent() {
         setMcpOAuthResult("MCP server connected successfully via OAuth.");
         setShowSettings(true);
       } else {
-        const messages: Record<string, string> = {
-          no_session: "OAuth failed: session expired. Please try again.",
-          user_not_found: "OAuth failed: user not found.",
-          no_vm: "OAuth failed: no VM found for your account.",
-          vm_error: "OAuth failed: could not reach your VM.",
-          write_failed: "OAuth failed: could not write config to VM.",
-        };
         setMcpOAuthResult(
           reason ? messages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
         );
       }
-      // Clean up URL params
       params.delete("mcp_oauth");
       params.delete("reason");
       const clean = params.toString();
       window.history.replaceState({}, "", clean ? `/?${clean}` : "/");
     }
+
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   React.useEffect(() => {
