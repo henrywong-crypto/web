@@ -686,7 +686,11 @@ async fn process_attachment_field(
         .context("file upload missing filename")?
         .to_owned();
     let dest_dir = match target_dir {
-        Some(d) => PathBuf::from(d),
+        Some(d) => {
+            let dir = PathBuf::from(d);
+            validate_within_dir(&dir, upload_dir)?;
+            dir
+        }
         None => upload_dir.to_path_buf(),
     };
     let remote_path = build_chat_upload_path(&filename, &dest_dir)?;

@@ -565,7 +565,9 @@ function McpServersSection({
       if (!startRes.ok) throw new Error((await startRes.text()) || `HTTP ${startRes.status}`);
       const startData = await startRes.json();
       if (startData.redirect) {
-        window.open(startData.redirect, "_blank", "noopener,noreferrer");
+        const redirectUrl = new URL(startData.redirect);
+        if (redirectUrl.protocol !== "https:") throw new Error("Insecure redirect blocked");
+        window.open(redirectUrl.href, "_blank", "noopener,noreferrer");
       }
     } catch (err) {
       setSaveError(String(err));

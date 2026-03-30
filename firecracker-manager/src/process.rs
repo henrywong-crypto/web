@@ -14,7 +14,7 @@ use tokio::{
 use crate::vm::JailerConfig;
 
 pub(crate) fn spawn_firecracker_jailed(vm_id: &str, jailer: &JailerConfig) -> Result<Child> {
-    Ok(Command::new("sudo")
+    Ok(Command::new("/usr/bin/sudo")
         .args([
             jailer.jailer_path.to_string_lossy().as_ref(),
             "--id",
@@ -160,6 +160,8 @@ mod tests {
 //   rootfs.ext4              <- rootfs copy (written separately by copy_rootfs)
 pub(crate) async fn prepare_jail_resources(chroot_dir: &Path, kernel_src: &Path) -> Result<()> {
     create_dir_all(chroot_dir.join("run")).await?;
+    // Safety: this check-then-copy is not atomic, but concurrent VM creation
+    // for the same user is prevented by acquire_provisioning_slot.
     let kernel_dst = chroot_dir.join("vmlinux");
     if !kernel_dst.exists() {
         copy(kernel_src, &kernel_dst).await.with_context(|| {

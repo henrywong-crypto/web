@@ -267,3 +267,45 @@ pub(crate) fn find_user_vm(vms: &VmRegistry, user_id: Uuid) -> Result<Option<Use
             guest_ip: e.vm.guest_ip(),
         }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn app_config_defaults_from_empty_json() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.port, 3000);
+        assert_eq!(config.vm_vcpu_count, 2);
+        assert_eq!(config.vm_mem_size_mib, 4096);
+        assert_eq!(config.vm_max_count, 20);
+        assert!(config.use_iam_creds);
+    }
+
+    #[test]
+    fn app_config_default_paths() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        assert_eq!(config.kernel_path, PathBuf::from("/var/lib/fc/vmlinux"));
+        assert_eq!(config.rootfs_path, PathBuf::from("/var/lib/fc/rootfs.ext4"));
+        assert_eq!(config.ssh_user, "ubuntu");
+        assert_eq!(config.database_url, "postgres://localhost/web");
+        assert_eq!(config.iam_role_name, "fc-role");
+        assert_eq!(config.jailer_chroot_base, PathBuf::from("/srv/jailer"));
+    }
+
+    #[test]
+    fn to_vm_build_config_copies_fields() {
+        let config: AppConfig = serde_json::from_str("{}").unwrap();
+        let vm_config = config.to_vm_build_config();
+        assert_eq!(vm_config.kernel_path, config.kernel_path);
+        assert_eq!(vm_config.net_helper_path, config.net_helper_path);
+        assert_eq!(vm_config.vcpu_count, config.vm_vcpu_count);
+        assert_eq!(vm_config.mem_size_mib, config.vm_mem_size_mib);
+        assert_eq!(vm_config.jailer_path, config.jailer_path);
+        assert_eq!(vm_config.firecracker_path, config.firecracker_path);
+        assert_eq!(vm_config.jailer_uid, config.jailer_uid);
+        assert_eq!(vm_config.jailer_gid, config.jailer_gid);
+        assert_eq!(vm_config.jailer_chroot_base, config.jailer_chroot_base);
+    }
+}

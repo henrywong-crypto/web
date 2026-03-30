@@ -168,6 +168,7 @@ pub async fn set_vm_claude_json(
 pub fn parse_mcp_servers(raw: &str) -> Result<serde_json::Map<String, serde_json::Value>> {
     let root: serde_json::Value =
         serde_json::from_str(raw).context("failed to parse ~/.claude.json")?;
+    // unwrap_or_default returns an empty Map when mcpServers is missing or not an object
     Ok(root
         .get("mcpServers")
         .and_then(|v| v.as_object())

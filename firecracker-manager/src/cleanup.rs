@@ -1,5 +1,6 @@
 use std::path::Path;
 use tokio::{fs, process::Command};
+use tracing::warn;
 
 use crate::network::delete_tap;
 
@@ -18,7 +19,9 @@ async fn stop_stale_firecracker_processes(chroot_base: &Path) {
     while let Ok(Some(entry)) = entries.next_entry().await {
         let socket_path = entry.path().join("root/run/firecracker.socket");
         if socket_path.exists() {
-            let _ = firecracker_client::stop_instance(&socket_path).await;
+            if let Err(e) = firecracker_client::stop_instance(&socket_path).await {
+                warn!("failed to stop stale VM");
+            }
         }
     }
     // Give processes time to exit after receiving shutdown
@@ -53,22 +56,26 @@ async fn delete_stale_chroot_dirs(chroot_base: &Path) {
     let Ok(mut entries) = fs::read_dir(&firecracker_dir).await else {
         return;
     };
-    // Clean up stale jail artifacts but preserve rootfs.ext4
-    // which persists across VM restarts.
+    // Clean up stale jail artifacts but preserve rootfs.ext4 and vmlinux
+    // which persist across VM restarts.
     while let Ok(Some(entry)) = entries.next_entry().await {
         let root_dir = entry.path().join("root");
         let Ok(mut children) = fs::read_dir(&root_dir).await else {
             continue;
         };
         while let Ok(Some(child)) = children.next_entry().await {
-            if child.file_name() == "rootfs.ext4" {
+            if child.file_name() == "rootfs.ext4" || child.file_name() == "vmlinux" {
                 continue;
             }
             let path = child.path();
             if path.is_dir() {
-                let _ = fs::remove_dir_all(&path).await;
+                if let Err(e) = fs::remove_dir_all(&path).await {
+                    warn!("failed to remove stale dir");
+                }
             } else {
-                let _ = fs::remove_file(&path).await;
+                if let Err(e) = fs::remove_file(&path).await {
+                    warn!("failed to remove stale file");
+                }
             }
         }
     }

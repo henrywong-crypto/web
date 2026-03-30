@@ -96,9 +96,9 @@ impl Vm {
 impl Drop for Vm {
     fn drop(&mut self) {
         if let Ok(raw_pid) = i32::try_from(self.pid) {
-            // Kill the process group so both the jailer/sudo wrapper and the
-            // firecracker child are terminated. Using the negative PID sends
-            // the signal to the entire process group.
+            // Kill the entire process group (sudo + jailer + firecracker),
+            // then the individual process as a fallback in case it isn't
+            // the process group leader.
             let _ = kill(Pid::from_raw(-raw_pid), Signal::SIGKILL);
             let _ = kill(Pid::from_raw(raw_pid), Signal::SIGKILL);
         }
@@ -138,8 +138,8 @@ async fn stop_vm(socket_path: &Path, pid: u32) {
         .await
         .is_err()
     {
+        // Process didn't exit in time — force kill the process group and individual process.
         if let Ok(raw_pid) = i32::try_from(pid) {
-            // Kill the entire process group (sudo + jailer + firecracker)
             let _ = kill(Pid::from_raw(-raw_pid), Signal::SIGKILL);
             let _ = kill(Pid::from_raw(raw_pid), Signal::SIGKILL);
         }

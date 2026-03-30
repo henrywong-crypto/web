@@ -351,7 +351,8 @@ pub(crate) async fn start_handler(
 
     let redirect_uri = &body.redirect_uri;
 
-    // Store OAuth state in session
+    // insert overwrites any stale values from a previous abandoned OAuth flow,
+    // and the callback uses remove for single-use consumption.
     session
         .insert("mcp_oauth_state", &state)
         .await
