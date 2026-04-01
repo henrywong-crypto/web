@@ -10,6 +10,7 @@ use chat_settings::{get_vm_claude_json_raw, set_vm_claude_json, upsert_mcp_serve
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::{net::Ipv4Addr, time::Duration};
 use subtle::ConstantTimeEq;
 use tower_sessions::Session;
 use tracing::{error, info};
@@ -68,7 +69,7 @@ fn is_safe_url(raw_url: &str) -> bool {
                 && !ip.is_unspecified()
                 && !ip.is_broadcast()
                 // AWS metadata endpoint
-                && ip != std::net::Ipv4Addr::new(169, 254, 169, 254)
+                && ip != Ipv4Addr::new(169, 254, 169, 254)
         }
         Some(url::Host::Ipv6(ip)) => !ip.is_loopback() && !ip.is_unspecified(),
         Some(url::Host::Domain(d)) => d != "localhost",
@@ -211,9 +212,9 @@ pub(crate) async fn discover_handler(
     }
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(Duration::from_secs(10))
         .build()
-        .map_err(|e| anyhow::anyhow!("failed to build HTTP client: {e}"))?;
+        .context("failed to build HTTP client")?;
 
     // ── Step 1: Protected Resource Discovery (RFC 9728) ──────────────────
     // Discover which authorization server protects this MCP resource.
@@ -297,9 +298,9 @@ pub(crate) async fn register_handler(
     }
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
+        .timeout(Duration::from_secs(10))
         .build()
-        .map_err(|e| anyhow::anyhow!("failed to build HTTP client: {e}"))?;
+        .context("failed to build HTTP client")?;
 
     // Pick token_endpoint_auth_method based on what the server supports.
     // Default to client_secret_post (most common for MCP servers like Figma).
@@ -341,7 +342,7 @@ pub(crate) async fn register_handler(
         .json(&reg_request)
         .send()
         .await
-        .map_err(|e| anyhow::anyhow!("registration request failed: {e}"))?;
+        .context("registration request failed")?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -356,7 +357,7 @@ pub(crate) async fn register_handler(
     let reg_resp: RegisterResponse = resp
         .json()
         .await
-        .map_err(|e| anyhow::anyhow!("failed to parse registration response: {e}"))?;
+        .context("failed to parse registration response")?;
 
     Ok(Json(reg_resp).into_response())
 }
@@ -378,8 +379,6 @@ pub(crate) async fn start_handler(
 
     let redirect_uri = &body.redirect_uri;
 
-    // insert overwrites any stale values from a previous abandoned OAuth flow,
-    // and the callback uses remove for single-use consumption.
     session
         .insert("mcp_oauth_state", &state)
         .await
@@ -496,9 +495,9 @@ pub(crate) async fn callback_handler(
 
     // Exchange authorization code for tokens
     let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
+        .timeout(Duration::from_secs(15))
         .build()
-        .map_err(|e| anyhow::anyhow!("failed to build HTTP client: {e}"))?;
+        .context("failed to build HTTP client")?;
 
     let mut token_params = vec![
         ("grant_type", "authorization_code".to_string()),
@@ -516,25 +515,17 @@ pub(crate) async fn callback_handler(
         .form(&token_params)
         .send()
         .await
-        .map_err(|e| anyhow::anyhow!("token exchange failed: {e}"))?;
+        .context("token exchange request failed")?;
 
     if !token_resp.status().is_success() {
-        let status = token_resp.status();
-        let body = match token_resp.text().await {
-            Ok(t) => t,
-            Err(_) => {
-                error!("failed to read token error body");
-                String::new()
-            }
-        };
-        error!("token exchange failed: {status} {body}");
+        error!("token exchange failed");
         return Ok(oauth_close_page("error", Some("token_exchange")));
     }
 
     let tokens: TokenResponse = token_resp
         .json()
         .await
-        .map_err(|e| anyhow::anyhow!("failed to parse token response: {e}"))?;
+        .context("failed to parse token response")?;
 
     info!("mcp oauth token exchange successful for server: {server_name}");
 
@@ -580,7 +571,7 @@ pub(crate) async fn callback_handler(
 
     // Upsert and write back
     let updated = upsert_mcp_server(raw.trim(), &server_name, server)
-        .map_err(|e| anyhow::anyhow!("failed to upsert MCP server config: {e}"))?;
+        .context("failed to upsert MCP server config")?;
 
     if let Err(_) = set_vm_claude_json(
         user_vm.guest_ip,

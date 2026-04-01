@@ -47,10 +47,7 @@ pub(crate) fn format_guest_mac(idx: u8) -> MacAddr6 {
 }
 
 pub async fn setup_host_networking(net_helper_path: &Path) -> Result<()> {
-    let Some(host_iface) = fetch_host_iface_name().await.ok() else {
-        warn!("could not determine host interface, skipping NAT setup");
-        return Ok(());
-    };
+    let host_iface = fetch_host_iface_name().await?;
     run_nat_setup(net_helper_path, &host_iface).await
 }
 
