@@ -77,7 +77,7 @@ function AppContent() {
     sessionStorage.setItem("active-tab", activeTab);
   }, [activeTab]);
 
-  // Handle MCP OAuth callback result via BroadcastChannel
+  // Handle MCP OAuth callback result via localStorage
   React.useEffect(() => {
     const messages: Record<string, string> = {
       state_mismatch: "OAuth failed: state mismatch. Please try again.",
@@ -85,10 +85,9 @@ function AppContent() {
       write_failed: "OAuth failed: could not write config to VM.",
     };
 
-    const ch = new BroadcastChannel("mcp_oauth");
-    ch.onmessage = (event: MessageEvent) => {
-      if (event.data?.type !== "mcp_oauth") return;
-      const { result, reason } = event.data;
+    const handleResult = (data: { type?: string; result?: string; reason?: string }) => {
+      if (data?.type !== "mcp_oauth") return;
+      const { result, reason } = data;
       if (result === "success") {
         setMcpOAuthResult("MCP server connected successfully via OAuth.");
         setShowSettings(true);
@@ -99,7 +98,14 @@ function AppContent() {
       }
     };
 
-    return () => ch.close();
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== "mcp_oauth_result" || !event.newValue) return;
+      localStorage.removeItem("mcp_oauth_result");
+      try { handleResult(JSON.parse(event.newValue)); } catch (_) {}
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => window.removeEventListener("storage", handleStorage);
   }, []);
 
   React.useEffect(() => {

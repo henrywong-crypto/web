@@ -104,18 +104,16 @@ fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) ->
     }
 }
 
-/// Return an HTML page that broadcasts the OAuth result and closes itself.
+/// Return an HTML page that signals the OAuth result via localStorage and closes itself.
 fn oauth_close_page(result: &str, reason: Option<&str>) -> Response {
     Html(format!(
-        r#"<!DOCTYPE html><html><head><title>OAuth</title></head><body>
+        r#"<!DOCTYPE html><html><head><title>OAuth</title></head><body style="font-family:sans-serif;text-align:center;padding:40px">
 <script>
-var msg = {{ type: "mcp_oauth", result: "{result}"{reason_js} }};
-var ch = new BroadcastChannel("mcp_oauth");
-ch.postMessage(msg);
-ch.close();
-window.close();
+localStorage.setItem("mcp_oauth_result", JSON.stringify({{ type: "mcp_oauth", result: "{result}"{reason_js} }}));
+try {{ window.close(); }} catch(_) {{}}
 </script>
-<p>Completing OAuth… you can close this tab.</p>
+<p>OAuth complete. You can close this window.</p>
+<button onclick="window.close()" style="margin-top:16px;padding:8px 24px;font-size:14px;cursor:pointer">Close</button>
 </body></html>"#,
         reason_js = reason.map(|r| format!(r#", reason: "{r}""#)).unwrap_or_default(),
     ))

@@ -441,31 +441,46 @@ function McpServersSection({
     setRegError(null);
   }, []);
 
-  // Listen for OAuth popup result via BroadcastChannel
+  // Listen for OAuth popup result via localStorage
   useEffect(() => {
-    const ch = new BroadcastChannel("mcp_oauth");
-    ch.onmessage = (event: MessageEvent) => {
-      if (event.data?.type !== "mcp_oauth") return;
-      if (event.data.result === "success") {
+    const errorMessages: Record<string, string> = {
+      state_mismatch: "OAuth failed: state mismatch. Please try again.",
+      token_exchange: "OAuth failed: token exchange failed.",
+      config_read: "OAuth failed: could not read VM config.",
+      config_parse: "OAuth failed: could not parse VM config.",
+      name_exists: "OAuth failed: server name already exists.",
+    };
+
+    const handleResult = (data: { type?: string; result?: string; reason?: string }) => {
+      if (data?.type !== "mcp_oauth") return;
+      if (data.result === "success") {
         resetForm();
         loadServers();
         setAuthorizing(false);
       } else {
-        const messages: Record<string, string> = {
-          state_mismatch: "OAuth failed: state mismatch. Please try again.",
-          token_exchange: "OAuth failed: token exchange failed.",
-          config_read: "OAuth failed: could not read VM config.",
-          config_parse: "OAuth failed: could not parse VM config.",
-          name_exists: "OAuth failed: server name already exists.",
-        };
-        const reason = event.data.reason as string | undefined;
+        const reason = data.reason;
         setSaveError(
-          reason ? messages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
+          reason ? errorMessages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
         );
         setAuthorizing(false);
       }
     };
-    return () => ch.close();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== "mcp_oauth_result" || !event.newValue) return;
+      localStorage.removeItem("mcp_oauth_result");
+      try { handleResult(JSON.parse(event.newValue)); } catch (_) {}
+    };
+    window.addEventListener("storage", handleStorage);
+
+    // Check if result was already written before listener was set up
+    const pending = localStorage.getItem("mcp_oauth_result");
+    if (pending) {
+      localStorage.removeItem("mcp_oauth_result");
+      try { handleResult(JSON.parse(pending)); } catch (_) {}
+    }
+
+    return () => window.removeEventListener("storage", handleStorage);
   }, [loadServers, resetForm]);
 
   const parseHeaders = (text: string): Record<string, string> => {
@@ -598,11 +613,21 @@ function McpServersSection({
         const h = 700;
         const left = window.screenX + (window.outerWidth - w) / 2;
         const top = window.screenY + (window.outerHeight - h) / 2;
-        window.open(
+        const popup = window.open(
           redirectUrl.href,
           "mcp_oauth_popup",
           `width=${w},height=${h},left=${left},top=${top}`,
         );
+        if (!popup) {
+          throw new Error("Popup blocked. Please allow popups for this site.");
+        }
+        // Poll for popup close — if user closes it without completing OAuth
+        const timer = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(timer);
+            setAuthorizing(false);
+          }
+        }, 500);
       }
     } catch (err) {
       setSaveError(String(err));

@@ -555,11 +555,15 @@ test.describe("mcp servers", () => {
       url: "https://oauth.example.com/mcp",
     });
 
-    // Simulate the OAuth popup sending a success message via BroadcastChannel
+    // Simulate the OAuth popup writing result to localStorage
     await page.evaluate(() => {
-      const ch = new BroadcastChannel("mcp_oauth");
-      ch.postMessage({ type: "mcp_oauth", result: "success" });
-      ch.close();
+      const msg = JSON.stringify({ type: "mcp_oauth", result: "success" });
+      localStorage.setItem("mcp_oauth_result", msg);
+      // Trigger storage event (doesn't fire in same tab, so dispatch manually)
+      window.dispatchEvent(new StorageEvent("storage", {
+        key: "mcp_oauth_result",
+        newValue: msg,
+      }));
     });
 
     // Server list should refresh and show the new server
