@@ -58,8 +58,7 @@ pub(crate) fn render_terminal_page(
 
 #[cfg(test)]
 mod tests {
-    use crate::templates::{render_login_page, render_terminal_page};
-    use std::path::Path;
+    use super::*;
 
     #[test]
     fn login_page_contains_sign_in_link() {

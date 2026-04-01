@@ -129,7 +129,7 @@ async fn send_sse(tx: &mpsc::Sender<Bytes>, data: Bytes) -> bool {
     }
 }
 
-pub(crate) fn build_sse_error_event(e: anyhow::Error) -> Result<Bytes> {
+fn build_sse_error_event(e: anyhow::Error) -> Result<Bytes> {
     let payload = serde_json::json!({ "message": e.to_string() });
     let serialized = serde_json::to_string(&payload)?;
     Ok(Bytes::from(format!(
@@ -194,7 +194,7 @@ async fn stream_ssh_channel(
 
 /// Check if the raw SSE data contains a `done` or `error_event` line,
 /// indicating the task is finished and the stream should close.
-pub(crate) fn data_contains_terminal_event(data: &[u8]) -> bool {
+fn data_contains_terminal_event(data: &[u8]) -> bool {
     data.windows(b"event: done\n".len())
         .any(|w| w == b"event: done\n")
         || data
@@ -204,7 +204,7 @@ pub(crate) fn data_contains_terminal_event(data: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::relay::{build_sse_error_event, data_contains_terminal_event};
+    use super::*;
 
     #[test]
     fn terminal_event_done() {

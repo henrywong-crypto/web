@@ -45,7 +45,7 @@ async fn delete_stale_tap_interfaces(net_helper_path: &Path) {
     }
 }
 
-pub(crate) fn parse_tap_interface_name(line: &str) -> Option<&str> {
+fn parse_tap_interface_name(line: &str) -> Option<&str> {
     // lines look like: "5: tap0: <...> ..."
     let name = line.split(':').nth(1)?.trim();
     name.starts_with("tap").then_some(name)
@@ -83,7 +83,7 @@ async fn delete_stale_chroot_dirs(chroot_base: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use crate::cleanup::parse_tap_interface_name;
+    use super::*;
 
     #[test]
     fn test_valid_tap_interface_extracted() {

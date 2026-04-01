@@ -18,7 +18,7 @@ use crate::{
 
 /// Only allow model identifiers that look like valid model strings.
 /// Rejects arbitrary user input to prevent abuse.
-pub(crate) fn is_valid_model(model: &str) -> bool {
+fn is_valid_model(model: &str) -> bool {
     !model.is_empty()
         && model.len() <= 128
         && model
@@ -27,7 +27,7 @@ pub(crate) fn is_valid_model(model: &str) -> bool {
 }
 
 /// API keys must be 1..=256 printable ASCII characters (no spaces, control chars, or newlines).
-pub(crate) fn is_valid_api_key(key: &str) -> bool {
+fn is_valid_api_key(key: &str) -> bool {
     !key.is_empty() && key.len() <= 256 && key.chars().all(|c| c.is_ascii_graphic())
 }
 
@@ -146,7 +146,7 @@ async fn update_model_setting(user_vm: &UserVm, state: &AppState, model: &str) -
 
 #[cfg(test)]
 mod tests {
-    use crate::settings::{is_valid_api_key, is_valid_model};
+    use super::*;
 
     #[test]
     fn valid_model_simple() {

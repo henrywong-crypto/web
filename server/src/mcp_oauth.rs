@@ -22,26 +22,26 @@ use crate::{
 // ── PKCE helpers ─────────────────────────────────────────────────────────
 
 /// Generate a cryptographically random code_verifier (43–128 chars, unreserved charset).
-pub(crate) fn generate_code_verifier() -> String {
+fn generate_code_verifier() -> String {
     let bytes: [u8; 32] = rand::rng().random();
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Compute S256 code_challenge from a code_verifier.
-pub(crate) fn compute_code_challenge(verifier: &str) -> String {
+fn compute_code_challenge(verifier: &str) -> String {
     let digest = Sha256::digest(verifier.as_bytes());
     URL_SAFE_NO_PAD.encode(digest)
 }
 
 /// Generate a random state nonce for CSRF protection.
-pub(crate) fn generate_state() -> String {
+fn generate_state() -> String {
     let bytes: [u8; 16] = rand::rng().random();
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Extract origin (scheme + host + port) and path component from a URL.
 /// Path has trailing slash stripped. Returns (origin, path) where path may be empty.
-pub(crate) fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
+fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
     let parsed = Url::parse(raw_url)?;
     let mut origin = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
     if let Some(port) = parsed.port() {
@@ -52,7 +52,7 @@ pub(crate) fn origin_and_path(raw_url: &str) -> Result<(String, String), url::Pa
 }
 
 /// Build RFC 9728 protected resource discovery URLs for a given MCP resource URL.
-pub(crate) fn build_protected_resource_urls(origin: &str, path: &str) -> Vec<String> {
+fn build_protected_resource_urls(origin: &str, path: &str) -> Vec<String> {
     if path.is_empty() {
         vec![format!("{origin}/.well-known/oauth-protected-resource")]
     } else {
@@ -64,7 +64,7 @@ pub(crate) fn build_protected_resource_urls(origin: &str, path: &str) -> Vec<Str
 }
 
 /// Build RFC 8414 / OIDC authorization server metadata discovery URLs.
-pub(crate) fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) -> Vec<String> {
+fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) -> Vec<String> {
     if path.is_empty() {
         vec![
             format!("{origin}/.well-known/oauth-authorization-server"),
@@ -572,10 +572,7 @@ pub(crate) async fn callback_handler(
 
 #[cfg(test)]
 mod tests {
-    use crate::mcp_oauth::{
-        build_auth_server_discovery_urls, build_protected_resource_urls, compute_code_challenge,
-        generate_code_verifier, generate_state, origin_and_path,
-    };
+    use super::*;
 
     // ── PKCE tests ──────────────────────────────────────────────────────
 

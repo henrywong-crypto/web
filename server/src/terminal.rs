@@ -221,18 +221,18 @@ async fn send_ws_keepalive(ws_sender: &mut SplitSink<WebSocket, Message>) -> Res
     Ok(())
 }
 
-pub(crate) const MAX_TERMINAL_COLS: u32 = 500;
-pub(crate) const MAX_TERMINAL_ROWS: u32 = 500;
+const MAX_TERMINAL_COLS: u32 = 500;
+const MAX_TERMINAL_ROWS: u32 = 500;
 
 #[derive(Debug, PartialEq)]
-pub(crate) struct TerminalSize {
+struct TerminalSize {
     cols: u32,
     rows: u32,
 }
 
 /// Parse a resize JSON message and return validated terminal size, or None if
 /// the message is not a resize or has invalid values.
-pub(crate) fn parse_resize_message(text: &str) -> Option<TerminalSize> {
+fn parse_resize_message(text: &str) -> Option<TerminalSize> {
     let json = serde_json::from_str::<serde_json::Value>(text).ok()?;
     if json["type"] != "resize" {
         return None;
@@ -260,7 +260,7 @@ async fn handle_resize_message(ssh_channel: &mut Channel<Msg>, text: &str) -> Re
 
 #[cfg(test)]
 mod tests {
-    use crate::terminal::{parse_resize_message, TerminalSize};
+    use super::*;
 
     #[test]
     fn resize_valid_cols_rows() {

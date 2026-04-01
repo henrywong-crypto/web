@@ -64,9 +64,7 @@ pub(crate) fn build_chroot_dir(chroot_base: &Path, vm_id: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use crate::process::{build_chroot_dir, build_vm_boot_args, prepare_jail_resources};
-    use std::net::Ipv4Addr;
-    use std::path::{Path, PathBuf};
+    use super::*;
 
     #[test]
     fn boot_args_includes_base_and_ip() {

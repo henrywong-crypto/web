@@ -270,8 +270,7 @@ pub(crate) fn find_user_vm(vms: &VmRegistry, user_id: Uuid) -> Result<Option<Use
 
 #[cfg(test)]
 mod tests {
-    use crate::state::AppConfig;
-    use std::path::PathBuf;
+    use super::*;
 
     #[test]
     fn app_config_defaults_from_empty_json() {

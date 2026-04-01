@@ -35,7 +35,7 @@ pub(crate) struct AddMcpServerBody {
 }
 
 /// Only allow server names that are safe identifiers.
-pub(crate) fn is_valid_server_name(name: &str) -> bool {
+fn is_valid_server_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
         && name
@@ -44,14 +44,14 @@ pub(crate) fn is_valid_server_name(name: &str) -> bool {
 }
 
 /// Only allow URL strings that look like valid HTTP(S) URLs.
-pub(crate) fn is_valid_url(url: &str) -> bool {
+fn is_valid_url(url: &str) -> bool {
     (url.starts_with("https://") || url.starts_with("http://"))
         && url.len() <= 2048
         && url.chars().all(|c| c.is_ascii_graphic())
 }
 
 /// Only allow header keys/values that are safe ASCII strings.
-pub(crate) fn is_valid_header(key: &str, value: &str) -> bool {
+fn is_valid_header(key: &str, value: &str) -> bool {
     !key.is_empty()
         && key.len() <= 256
         && key.chars().all(|c| c.is_ascii_graphic())
@@ -192,7 +192,7 @@ pub(crate) async fn delete_handler(
 
 #[cfg(test)]
 mod tests {
-    use crate::mcp::{is_valid_header, is_valid_server_name, is_valid_url};
+    use super::*;
 
     // --- is_valid_server_name ---
 
