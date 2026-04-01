@@ -32,8 +32,7 @@ pub enum AgentMessage {
 
 #[cfg(test)]
 mod tests {
-    use crate::AgentMessage;
-    use serde_json::json;
+    use super::*;
 
     #[test]
     fn query_serializes_with_all_fields() {

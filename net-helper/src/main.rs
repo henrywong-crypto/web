@@ -274,7 +274,7 @@ fn raise_ambient_net_admin() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_iface_name, parse_tap_name};
+    use super::*;
 
     #[test]
     fn tap_name_valid() {

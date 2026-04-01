@@ -19,7 +19,7 @@ pub struct ContentBlock {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Content, ContentBlock};
+    use super::*;
 
     #[test]
     fn deserialize_text_content() {

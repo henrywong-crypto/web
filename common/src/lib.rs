@@ -33,8 +33,7 @@ pub fn validate_within_dir(real_path: &Path, allowed_dir: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::validate_within_dir;
-    use std::path::Path;
+    use super::*;
 
     #[test]
     fn test_path_within_dir_passes() {

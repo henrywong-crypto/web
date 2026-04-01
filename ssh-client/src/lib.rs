@@ -163,7 +163,7 @@ pub async fn open_direct_streamlocal_channel(
 
 #[cfg(test)]
 mod tests {
-    use crate::SSH_CONNECT_TIMEOUT_SECS;
+    use super::*;
 
     #[test]
     fn ssh_connect_timeout_is_10_seconds() {

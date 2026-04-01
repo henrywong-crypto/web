@@ -89,10 +89,7 @@ async fn fetch_host_iface_name() -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::network::{format_guest_ip, format_guest_mac, format_tap_ip, format_tap_name};
-    use ipnetwork::Ipv4Network;
-    use macaddr::MacAddr6;
-    use std::net::Ipv4Addr;
+    use super::*;
 
     // ── format_tap_name ───────────────────────────────────────────────────────
 
