@@ -2,7 +2,7 @@ use std::path::Path;
 use tokio::{fs, process::Command};
 use tracing::warn;
 
-use crate::network::delete_tap;
+use crate::{network::delete_tap, vm::cleanup_chroot};
 
 pub async fn clean_stale_vms(net_helper_path: &Path, jailer_chroot_base: &Path) {
     stop_stale_firecracker_processes(jailer_chroot_base).await;
@@ -54,28 +54,9 @@ async fn delete_stale_chroot_dirs(chroot_base: &Path) {
     let Ok(mut entries) = fs::read_dir(&firecracker_dir).await else {
         return;
     };
-    // Clean up stale jail artifacts but preserve rootfs.ext4 and vmlinux
-    // which persist across VM restarts.
     while let Ok(Some(entry)) = entries.next_entry().await {
         let root_dir = entry.path().join("root");
-        let Ok(mut children) = fs::read_dir(&root_dir).await else {
-            continue;
-        };
-        while let Ok(Some(child)) = children.next_entry().await {
-            if child.file_name() == "rootfs.ext4" || child.file_name() == "vmlinux" {
-                continue;
-            }
-            let path = child.path();
-            if path.is_dir() {
-                if let Err(_) = fs::remove_dir_all(&path).await {
-                    warn!("failed to remove stale dir");
-                }
-            } else {
-                if let Err(_) = fs::remove_file(&path).await {
-                    warn!("failed to remove stale file");
-                }
-            }
-        }
+        cleanup_chroot(&root_dir);
     }
 }
 
