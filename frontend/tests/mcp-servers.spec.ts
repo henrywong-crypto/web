@@ -556,13 +556,13 @@ test.describe("mcp servers", () => {
     });
 
     // Simulate the OAuth popup writing result to localStorage
+    // (In real flow, the storage event fires cross-tab; in test we dispatch it manually)
     await page.evaluate(() => {
-      const msg = JSON.stringify({ type: "mcp_oauth", result: "success" });
-      localStorage.setItem("mcp_oauth_result", msg);
-      // Trigger storage event (doesn't fire in same tab, so dispatch manually)
+      const value = JSON.stringify({ type: "mcp_oauth", result: "success" });
+      localStorage.setItem("mcp_oauth_result", value);
       window.dispatchEvent(new StorageEvent("storage", {
         key: "mcp_oauth_result",
-        newValue: msg,
+        newValue: value,
       }));
     });
 

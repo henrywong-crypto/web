@@ -3,7 +3,7 @@ use axum::{
     Json,
     extract::{Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
 };
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chat_settings::{get_vm_claude_json_raw, set_vm_claude_json, upsert_mcp_server};
@@ -104,20 +104,11 @@ fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) ->
     }
 }
 
-/// Return an HTML page that signals the OAuth result via localStorage and closes itself.
+/// Redirect to the main app with the OAuth result as query params.
+/// The SPA reads these on load and updates the UI accordingly.
 fn oauth_close_page(result: &str, reason: Option<&str>) -> Response {
-    Html(format!(
-        r#"<!DOCTYPE html><html><head><title>OAuth</title></head><body style="font-family:sans-serif;text-align:center;padding:40px">
-<script>
-localStorage.setItem("mcp_oauth_result", JSON.stringify({{ type: "mcp_oauth", result: "{result}"{reason_js} }}));
-try {{ window.close(); }} catch(_) {{}}
-</script>
-<p>OAuth complete. You can close this window.</p>
-<button onclick="window.close()" style="margin-top:16px;padding:8px 24px;font-size:14px;cursor:pointer">Close</button>
-</body></html>"#,
-        reason_js = reason.map(|r| format!(r#", reason: "{r}""#)).unwrap_or_default(),
-    ))
-    .into_response()
+    let reason_param = reason.map(|r| format!("&reason={r}")).unwrap_or_default();
+    axum::response::Redirect::to(&format!("/?mcp_oauth={result}{reason_param}")).into_response()
 }
 
 // ── Types ────────────────────────────────────────────────────────────────
