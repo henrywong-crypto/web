@@ -441,6 +441,21 @@ function McpServersSection({
     setRegError(null);
   }, []);
 
+  // Listen for OAuth popup success to refresh the server list
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== "mcp_oauth") return;
+      if (event.data.result === "success") {
+        resetForm();
+        loadServers();
+        setAuthorizing(false);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, [loadServers, resetForm]);
+
   const parseHeaders = (text: string): Record<string, string> => {
     const headers: Record<string, string> = {};
     for (const line of text.split("\n")) {
@@ -567,7 +582,7 @@ function McpServersSection({
       if (startData.redirect) {
         const redirectUrl = new URL(startData.redirect);
         if (redirectUrl.protocol !== "https:") throw new Error("Insecure redirect blocked");
-        window.open(redirectUrl.href, "_blank", "noopener,noreferrer");
+        window.open(redirectUrl.href, "_blank", "noreferrer");
       }
     } catch (err) {
       setSaveError(String(err));

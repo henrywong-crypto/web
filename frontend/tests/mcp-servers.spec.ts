@@ -21,6 +21,7 @@
  * MCP-20  Auto-reg with secret   — auto-registration with client_secret shows OAuth ready
  * MCP-21  Duplicate name blocked — adding a server with an existing name shows error
  * MCP-22  gemini-websearch protected — no delete button for gemini-websearch
+ * MCP-23  OAuth success refreshes list — postMessage from popup refreshes server list
  */
 import { test, expect } from "@playwright/test";
 import { setupApp } from "./helpers/setup";
@@ -533,5 +534,36 @@ test.describe("mcp servers", () => {
     // Only one delete button should exist (for other-server, not gemini-websearch)
     const deleteButtons = page.getByTitle("Remove server");
     await expect(deleteButtons).toHaveCount(1);
+  });
+
+  test("MCP-23 OAuth success postMessage refreshes server list", async ({
+    page,
+  }) => {
+    const ctrl = await setupApp(page, { mcpServers: [] });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+
+    await expect(
+      page.getByText("No MCP servers configured."),
+    ).toBeVisible();
+
+    // Simulate the backend having stored an OAuth server
+    ctrl.pushMcpServer({
+      name: "oauth-server",
+      type: "http",
+      url: "https://oauth.example.com/mcp",
+    });
+
+    // Simulate the OAuth popup sending a success postMessage
+    await page.evaluate(() => {
+      window.postMessage({ type: "mcp_oauth", result: "success" }, window.location.origin);
+    });
+
+    // Server list should refresh and show the new server
+    await expect(page.getByText("oauth-server")).toBeVisible();
+    await expect(
+      page.getByText("https://oauth.example.com/mcp"),
+    ).toBeVisible();
   });
 });

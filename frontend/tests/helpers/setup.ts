@@ -901,6 +901,9 @@ export async function setupApp(
     lastMcpAdd: () => lastMcpAddBody,
     lastMcpDelete: () => lastMcpDeleteName,
     lastMcpRegister: () => lastMcpRegisterBody,
+    pushMcpServer: (server: McpServerEntry) => {
+      mcpServers.push(server);
+    },
   };
 }
 
