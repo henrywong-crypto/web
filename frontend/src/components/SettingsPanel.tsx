@@ -441,10 +441,10 @@ function McpServersSection({
     setRegError(null);
   }, []);
 
-  // Listen for OAuth popup success to refresh the server list
+  // Listen for OAuth popup result via BroadcastChannel
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+    const ch = new BroadcastChannel("mcp_oauth");
+    ch.onmessage = (event: MessageEvent) => {
       if (event.data?.type !== "mcp_oauth") return;
       if (event.data.result === "success") {
         resetForm();
@@ -465,8 +465,7 @@ function McpServersSection({
         setAuthorizing(false);
       }
     };
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+    return () => ch.close();
   }, [loadServers, resetForm]);
 
   const parseHeaders = (text: string): Record<string, string> => {

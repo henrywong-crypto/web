@@ -104,18 +104,16 @@ fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) ->
     }
 }
 
-/// Return an HTML page that posts the OAuth result to the opener window and closes itself.
+/// Return an HTML page that broadcasts the OAuth result and closes itself.
 fn oauth_close_page(result: &str, reason: Option<&str>) -> Response {
-    let reason_param = reason.map(|r| format!("&reason={r}")).unwrap_or_default();
     Html(format!(
         r#"<!DOCTYPE html><html><head><title>OAuth</title></head><body>
 <script>
-if (window.opener) {{
-    window.opener.postMessage({{ type: "mcp_oauth", result: "{result}"{reason_js} }}, window.location.origin);
-    window.close();
-}} else {{
-    window.location.href = "/?mcp_oauth={result}{reason_param}";
-}}
+var msg = {{ type: "mcp_oauth", result: "{result}"{reason_js} }};
+var ch = new BroadcastChannel("mcp_oauth");
+ch.postMessage(msg);
+ch.close();
+window.close();
 </script>
 <p>Completing OAuth… you can close this tab.</p>
 </body></html>"#,

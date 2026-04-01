@@ -555,9 +555,11 @@ test.describe("mcp servers", () => {
       url: "https://oauth.example.com/mcp",
     });
 
-    // Simulate the OAuth popup sending a success postMessage
+    // Simulate the OAuth popup sending a success message via BroadcastChannel
     await page.evaluate(() => {
-      window.postMessage({ type: "mcp_oauth", result: "success" }, window.location.origin);
+      const ch = new BroadcastChannel("mcp_oauth");
+      ch.postMessage({ type: "mcp_oauth", result: "success" });
+      ch.close();
     });
 
     // Server list should refresh and show the new server
