@@ -555,15 +555,11 @@ test.describe("mcp servers", () => {
       url: "https://oauth.example.com/mcp",
     });
 
-    // Simulate the OAuth popup writing result to localStorage
-    // (In real flow, the storage event fires cross-tab; in test we dispatch it manually)
+    // Simulate the OAuth popup broadcasting result via BroadcastChannel
     await page.evaluate(() => {
-      const value = JSON.stringify({ type: "mcp_oauth", result: "success" });
-      localStorage.setItem("mcp_oauth_result", value);
-      window.dispatchEvent(new StorageEvent("storage", {
-        key: "mcp_oauth_result",
-        newValue: value,
-      }));
+      const ch = new BroadcastChannel("mcp_oauth");
+      ch.postMessage({ type: "mcp_oauth", result: "success" });
+      ch.close();
     });
 
     // Server list should refresh and show the new server

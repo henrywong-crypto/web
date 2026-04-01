@@ -77,39 +77,29 @@ function AppContent() {
     sessionStorage.setItem("active-tab", activeTab);
   }, [activeTab]);
 
-  // Handle MCP OAuth callback result from URL params (popup redirects here)
+  // Handle MCP OAuth callback result via BroadcastChannel
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const result = params.get("mcp_oauth");
-    if (!result) return;
-
-    const reason = params.get("reason");
     const messages: Record<string, string> = {
       state_mismatch: "OAuth failed: state mismatch. Please try again.",
       token_exchange: "OAuth failed: token exchange failed.",
       write_failed: "OAuth failed: could not write config to VM.",
     };
 
-    // Write to localStorage so the main window's SettingsPanel picks it up
-    localStorage.setItem(
-      "mcp_oauth_result",
-      JSON.stringify({ type: "mcp_oauth", result, reason }),
-    );
+    const ch = new BroadcastChannel("mcp_oauth");
+    ch.onmessage = (event: MessageEvent) => {
+      if (event.data?.type !== "mcp_oauth") return;
+      const { result, reason } = event.data;
+      if (result === "success") {
+        setMcpOAuthResult("MCP server connected successfully via OAuth.");
+        setShowSettings(true);
+      } else {
+        setMcpOAuthResult(
+          reason ? messages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
+        );
+      }
+    };
 
-    if (result === "success") {
-      setMcpOAuthResult("MCP server connected successfully via OAuth.");
-      setShowSettings(true);
-    } else {
-      setMcpOAuthResult(
-        reason ? messages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
-      );
-    }
-
-    // Clean URL
-    params.delete("mcp_oauth");
-    params.delete("reason");
-    const clean = params.toString();
-    window.history.replaceState({}, "", clean ? `/?${clean}` : "/");
+    return () => ch.close();
   }, []);
 
   React.useEffect(() => {

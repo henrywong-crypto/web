@@ -104,11 +104,13 @@ fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) ->
     }
 }
 
-/// Redirect to the main app with the OAuth result as query params.
-/// The SPA reads these on load and updates the UI accordingly.
+/// Redirect to a minimal close page that broadcasts the result via BroadcastChannel.
 fn oauth_close_page(result: &str, reason: Option<&str>) -> Response {
     let reason_param = reason.map(|r| format!("&reason={r}")).unwrap_or_default();
-    axum::response::Redirect::to(&format!("/?mcp_oauth={result}{reason_param}")).into_response()
+    axum::response::Redirect::to(&format!(
+        "/oauth-close?mcp_oauth={result}{reason_param}"
+    ))
+    .into_response()
 }
 
 // ── Types ────────────────────────────────────────────────────────────────

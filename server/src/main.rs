@@ -59,7 +59,10 @@ use crate::{
     },
     settings::{get_settings_handler, put_settings_handler},
     state::{AppState, load_config},
-    static_files::{load_static_assets, serve_app_js, serve_font, serve_styles_css},
+    static_files::{
+        load_static_assets, render_oauth_close_page, serve_app_js, serve_font, serve_oauth_close,
+        serve_styles_css,
+    },
     terminal::handle_ws_upgrade,
     upload::upload_file_handler,
 };
@@ -179,6 +182,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
         .route("/ws", get(handle_ws_upgrade))
         .route("/login", get(get_login_handler))
         .route("/login/cognito", get(get_cognito_login_handler))
+        .route("/oauth-close", get(|| async { axum::response::Html(render_oauth_close_page()) }))
         .route("/logout", post(get_logout_handler))
         .route("/callback", get(get_callback_handler))
         .route("/callback/gateway", get(gateway_callback_handler))
@@ -186,6 +190,7 @@ fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {
         .route("/api/renew-gateway-key", post(renew_gateway_key_handler))
         .route("/static/app.js", get(serve_app_js))
         .route("/static/styles.css", get(serve_styles_css))
+        .route("/static/oauth-close.js", get(serve_oauth_close))
         .route("/static/fonts/{filename}", get(serve_font))
         .with_state(app_state)
         .layer(middleware::from_fn(csrf_middleware))

@@ -441,22 +441,32 @@ function McpServersSection({
     setRegError(null);
   }, []);
 
-  // Listen for OAuth popup result via localStorage (cross-tab storage event)
+  // Listen for OAuth popup result via BroadcastChannel
   useEffect(() => {
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== "mcp_oauth_result" || !event.newValue) return;
-      localStorage.removeItem("mcp_oauth_result");
-      try {
-        const data = JSON.parse(event.newValue);
-        if (data?.type === "mcp_oauth" && data.result === "success") {
-          resetForm();
-          loadServers();
-          setAuthorizing(false);
-        }
-      } catch (_) {}
+    const errorMessages: Record<string, string> = {
+      state_mismatch: "OAuth failed: state mismatch. Please try again.",
+      token_exchange: "OAuth failed: token exchange failed.",
+      config_read: "OAuth failed: could not read VM config.",
+      config_parse: "OAuth failed: could not parse VM config.",
+      name_exists: "OAuth failed: server name already exists.",
     };
-    window.addEventListener("storage", handleStorage);
-    return () => window.removeEventListener("storage", handleStorage);
+
+    const ch = new BroadcastChannel("mcp_oauth");
+    ch.onmessage = (event: MessageEvent) => {
+      if (event.data?.type !== "mcp_oauth") return;
+      if (event.data.result === "success") {
+        resetForm();
+        loadServers();
+        setAuthorizing(false);
+      } else {
+        const reason = event.data.reason as string | undefined;
+        setSaveError(
+          reason ? errorMessages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
+        );
+        setAuthorizing(false);
+      }
+    };
+    return () => ch.close();
   }, [loadServers, resetForm]);
 
   const parseHeaders = (text: string): Record<string, string> => {
@@ -597,34 +607,9 @@ function McpServersSection({
         if (!popup) {
           throw new Error("Popup blocked. Please allow popups for this site.");
         }
-        // Poll for popup close and check localStorage for result
+        // Poll for popup close — clears "Redirecting…" if user closes popup manually.
+        // BroadcastChannel handles the actual result communication.
         const timer = setInterval(() => {
-          const result = localStorage.getItem("mcp_oauth_result");
-          if (result) {
-            localStorage.removeItem("mcp_oauth_result");
-            clearInterval(timer);
-            try {
-              const data = JSON.parse(result);
-              if (data?.type === "mcp_oauth" && data.result === "success") {
-                resetForm();
-                loadServers();
-              } else {
-                const reason = data?.reason as string | undefined;
-                const msgs: Record<string, string> = {
-                  state_mismatch: "OAuth failed: state mismatch. Please try again.",
-                  token_exchange: "OAuth failed: token exchange failed.",
-                  config_read: "OAuth failed: could not read VM config.",
-                  config_parse: "OAuth failed: could not parse VM config.",
-                  name_exists: "OAuth failed: server name already exists.",
-                };
-                setSaveError(
-                  reason ? msgs[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
-                );
-              }
-            } catch (_) {}
-            setAuthorizing(false);
-            return;
-          }
           if (popup.closed) {
             clearInterval(timer);
             setAuthorizing(false);
