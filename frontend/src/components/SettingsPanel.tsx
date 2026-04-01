@@ -450,6 +450,19 @@ function McpServersSection({
         resetForm();
         loadServers();
         setAuthorizing(false);
+      } else {
+        const messages: Record<string, string> = {
+          state_mismatch: "OAuth failed: state mismatch. Please try again.",
+          token_exchange: "OAuth failed: token exchange failed.",
+          config_read: "OAuth failed: could not read VM config.",
+          config_parse: "OAuth failed: could not parse VM config.",
+          name_exists: "OAuth failed: server name already exists.",
+        };
+        const reason = event.data.reason as string | undefined;
+        setSaveError(
+          reason ? messages[reason] || `OAuth failed: ${reason}` : "OAuth failed. Please try again.",
+        );
+        setAuthorizing(false);
       }
     };
     window.addEventListener("message", handleMessage);
