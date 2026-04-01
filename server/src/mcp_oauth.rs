@@ -242,8 +242,10 @@ pub(crate) async fn discover_handler(
                 if let Ok(meta) = resp.json::<ProtectedResourceMetadata>().await {
                     info!("mcp oauth discover: found authorization_servers: {:?}", meta.authorization_servers);
                     if let Some(first) = meta.authorization_servers.into_iter().next() {
-                        auth_server_url = Some(first);
-                        break;
+                        if is_safe_url(&first) {
+                            auth_server_url = Some(first);
+                            break;
+                        }
                     }
                 }
             } else {
@@ -354,11 +356,10 @@ pub(crate) async fn register_handler(
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body_text = resp.text().await.context("failed to read registration error body")?;
-        error!("mcp oauth registration failed: {status} {body_text}");
+        error!("mcp oauth registration failed: {status}");
         return Ok((
             StatusCode::BAD_GATEWAY,
-            format!("registration failed: {status} {body_text}"),
+            format!("registration failed: {status}"),
         )
             .into_response());
     }
@@ -378,6 +379,10 @@ pub(crate) async fn start_handler(
     session: Session,
     Json(body): Json<OAuthStartBody>,
 ) -> Result<Response, AppError> {
+    if !is_safe_url(&body.token_endpoint) {
+        return Ok((StatusCode::BAD_REQUEST, "Invalid token endpoint").into_response());
+    }
+
     let code_verifier = generate_code_verifier();
     let code_challenge = compute_code_challenge(&code_verifier);
     let state = generate_state();

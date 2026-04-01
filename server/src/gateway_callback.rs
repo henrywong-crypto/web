@@ -46,6 +46,8 @@ pub(crate) async fn gateway_callback_handler(
         return Ok(Redirect::to("/").into_response());
     }
 
+    session.cycle_id().await.context("failed to cycle session id")?;
+
     // Retrieve PKCE verifier
     let pkce_verifier = session
         .remove::<String>("gateway_oauth_pkce_verifier")

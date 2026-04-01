@@ -58,10 +58,6 @@ fn validate_url(url: &str) -> Result<(), validator::ValidationError> {
     Ok(())
 }
 
-fn is_valid_url(url: &str) -> bool {
-    url.len() <= 2048 && validate_url(url).is_ok()
-}
-
 fn is_valid_server_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
@@ -210,6 +206,10 @@ pub(crate) async fn delete_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn is_valid_url(url: &str) -> bool {
+        url.len() <= 2048 && validate_url(url).is_ok()
+    }
 
     // --- is_valid_server_name ---
 
