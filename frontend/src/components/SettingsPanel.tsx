@@ -582,7 +582,7 @@ function McpServersSection({
       if (startData.redirect) {
         const redirectUrl = new URL(startData.redirect);
         if (redirectUrl.protocol !== "https:") throw new Error("Insecure redirect blocked");
-        window.open(redirectUrl.href, "_blank", "noreferrer");
+        window.open(redirectUrl.href, "_blank");
       }
     } catch (err) {
       setSaveError(String(err));
