@@ -226,7 +226,7 @@ async fn launch_vm(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::vm::cleanup_chroot;
 
     #[test]
     fn cleanup_chroot_preserves_rootfs_and_vmlinux() {

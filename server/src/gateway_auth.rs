@@ -154,7 +154,8 @@ pub(crate) async fn renew_gateway_key_handler(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::gateway_auth::is_gateway_configured;
+    use crate::state::AppConfig;
 
     fn make_config(client_id: &str, api_url: &str, identity_provider: &str) -> AppConfig {
         AppConfig {

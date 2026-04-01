@@ -62,17 +62,17 @@ pub(crate) async fn get_csrf_token(session: &Session) -> Result<String> {
     Ok(token)
 }
 
-fn generate_token() -> String {
+pub(crate) fn generate_token() -> String {
     let mut buf = [0u8; 32];
     rand::rng().fill_bytes(&mut buf);
     hex::encode(buf)
 }
 
-fn constant_time_eq(a: &str, b: &str) -> bool {
+pub(crate) fn constant_time_eq(a: &str, b: &str) -> bool {
     a.len() == b.len() && a.as_bytes().ct_eq(b.as_bytes()).unwrap_u8() == 1
 }
 
-fn attach_csrf_token<B>(response: &mut axum::http::Response<B>, csrf_token: &str) {
+pub(crate) fn attach_csrf_token<B>(response: &mut axum::http::Response<B>, csrf_token: &str) {
     if let Ok(value) = csrf_token.parse::<HeaderValue>() {
         response.headers_mut().insert("x-csrf-token", value);
     }
@@ -80,7 +80,7 @@ fn attach_csrf_token<B>(response: &mut axum::http::Response<B>, csrf_token: &str
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::csrf::{attach_csrf_token, constant_time_eq, generate_token};
     use axum::http::Response as HttpResponse;
     use std::collections::HashSet;
 

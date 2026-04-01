@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
@@ -178,8 +178,8 @@ pub(crate) fn load_config() -> Result<AppConfig> {
     let app_config: AppConfig = Config::builder()
         .add_source(File::with_name("config").required(false))
         .add_source(Environment::default())
-        .build()?
-        .try_deserialize()?;
+        .build().context("failed to build config")?
+        .try_deserialize().context("failed to deserialize config")?;
     tracing::info!("config loaded");
     Ok(app_config)
 }
@@ -270,7 +270,7 @@ pub(crate) fn find_user_vm(vms: &VmRegistry, user_id: Uuid) -> Result<Option<Use
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::state::AppConfig;
     use std::path::PathBuf;
 
     #[test]

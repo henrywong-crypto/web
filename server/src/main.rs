@@ -24,13 +24,14 @@ use axum::{
     response::Response,
     routing::{delete, get, post},
 };
-use firecracker_manager::{cleanup_stale_vms, setup_host_networking};
+use firecracker_manager::{clean_stale_vms, setup_host_networking};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use time::Duration;
 use tokio::{net::TcpListener, signal, sync::oneshot, task::AbortHandle};
 use tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer, cookie::SameSite};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing::info;
+use tracing_subscriber::EnvFilter;
 use vm_lifecycle::{refresh_all_vm_mmds, save_all_vm_rootfs, sweep_idle_vms};
 
 use crate::{
@@ -68,62 +69,72 @@ use crate::{
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or(tracing_subscriber::EnvFilter::new("info")),
+            EnvFilter::try_from_default_env()
+                .unwrap_or(EnvFilter::new("info")),
         )
         .init();
     let app_config = load_config()?;
     let static_assets = load_static_assets(&app_config.static_dir)?;
     let pg_pool = store::connect_db(&app_config.database_url).await?;
     store::run_migrations(&pg_pool).await?;
-    let (session_store, deletion_task) = create_session_store(pg_pool.clone()).await?;
+    let session_store_handle = create_session_store(pg_pool.clone()).await?;
     let app_state = AppState::new(app_config, pg_pool, static_assets);
     let port = app_state.config.port;
-    cleanup_stale_vms(
+    clean_stale_vms(
         &app_state.config.net_helper_path,
         &app_state.config.jailer_chroot_base,
     )
     .await;
     setup_host_networking(&app_state.config.net_helper_path).await?;
-    let (mmds_refresh_abort_handle, idle_vm_sweep_abort_handle) =
-        spawn_background_tasks(&app_state);
-    let router = build_router(app_state.clone(), session_store);
+    let background_task_handles = spawn_background_tasks(&app_state);
+    let router = build_router(app_state.clone(), session_store_handle.store);
     serve_router(
         router,
         port,
         app_state,
-        deletion_task.abort_handle(),
-        mmds_refresh_abort_handle,
-        idle_vm_sweep_abort_handle,
+        session_store_handle.deletion_task.abort_handle(),
+        background_task_handles.mmds_refresh,
+        background_task_handles.idle_vm_sweep,
     )
     .await?;
     Ok(())
 }
 
-async fn create_session_store(
-    pg_pool: store::PgPool,
-) -> Result<(
-    PostgresStore,
-    tokio::task::JoinHandle<Result<(), tower_sessions::session_store::Error>>,
-)> {
+struct SessionStoreHandle {
+    store: PostgresStore,
+    deletion_task: tokio::task::JoinHandle<Result<(), tower_sessions::session_store::Error>>,
+}
+
+async fn create_session_store(pg_pool: store::PgPool) -> Result<SessionStoreHandle> {
     let session_store = PostgresStore::new(pg_pool);
-    session_store.migrate().await?;
+    session_store.migrate().await.context("failed to migrate session store")?;
     let deletion_task = tokio::task::spawn(
         session_store
             .clone()
             .continuously_delete_expired(tokio::time::Duration::from_secs(3600)),
     );
-    Ok((session_store, deletion_task))
+    Ok(SessionStoreHandle {
+        store: session_store,
+        deletion_task,
+    })
 }
 
-fn spawn_background_tasks(app_state: &AppState) -> (Option<AbortHandle>, AbortHandle) {
-    let mmds_refresh_abort_handle = if app_state.config.use_iam_creds {
+struct BackgroundTaskHandles {
+    mmds_refresh: Option<AbortHandle>,
+    idle_vm_sweep: AbortHandle,
+}
+
+fn spawn_background_tasks(app_state: &AppState) -> BackgroundTaskHandles {
+    let mmds_refresh = if app_state.config.use_iam_creds {
         Some(spawn_mmds_refresh_task(app_state.clone()).abort_handle())
     } else {
         None
     };
-    let idle_vm_sweep_abort_handle = spawn_idle_vm_sweep_task(app_state.clone()).abort_handle();
-    (mmds_refresh_abort_handle, idle_vm_sweep_abort_handle)
+    let idle_vm_sweep = spawn_idle_vm_sweep_task(app_state.clone()).abort_handle();
+    BackgroundTaskHandles {
+        mmds_refresh,
+        idle_vm_sweep,
+    }
 }
 
 fn build_router(app_state: AppState, session_store: PostgresStore) -> Router {

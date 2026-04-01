@@ -686,8 +686,8 @@ async fn process_attachment_field(
         .context("file upload missing filename")?
         .to_owned();
     let dest_dir = match target_dir {
-        Some(d) => {
-            let dir = PathBuf::from(d);
+        Some(target_dir_str) => {
+            let dir = PathBuf::from(target_dir_str);
             validate_within_dir(&dir, upload_dir)?;
             dir
         }
@@ -720,7 +720,7 @@ async fn process_attachment_field(
     Ok(real_path)
 }
 
-fn build_chat_upload_path(filename: &str, upload_dir: &Path) -> Result<PathBuf> {
+pub(crate) fn build_chat_upload_path(filename: &str, upload_dir: &Path) -> Result<PathBuf> {
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .context("system clock is before Unix epoch")?
@@ -731,7 +731,7 @@ fn build_chat_upload_path(filename: &str, upload_dir: &Path) -> Result<PathBuf> 
 
 /// Validates that a session_id looks like a UUID (alphanumeric + hyphens only).
 /// Prevents path traversal via crafted session IDs like "../../etc/passwd".
-fn validate_session_id(session_id: &str) -> Result<(), AppError> {
+pub(crate) fn validate_session_id(session_id: &str) -> Result<(), AppError> {
     if session_id.is_empty()
         || session_id.len() > 64
         || !session_id
@@ -774,7 +774,8 @@ async fn write_chat_file_via_sftp(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::handlers::{build_chat_upload_path, validate_session_id};
+    use std::path::PathBuf;
 
     // --- validate_session_id tests ---
 

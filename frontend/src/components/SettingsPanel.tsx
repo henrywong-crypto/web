@@ -577,6 +577,10 @@ function McpServersSection({
 
   const handleAdd = useCallback(async () => {
     if (!formName.trim() || !formUrl.trim()) return;
+    if (servers.some((s) => s.name === formName.trim())) {
+      setSaveError("Server name already exists");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -598,7 +602,7 @@ function McpServersSection({
     } finally {
       setSaving(false);
     }
-  }, [formName, formUrl, formHeaders, csrfFetch, loadServers, resetForm]);
+  }, [formName, formUrl, formHeaders, servers, csrfFetch, loadServers, resetForm]);
 
   const handleDelete = useCallback(
     async (name: string) => {
@@ -653,14 +657,16 @@ function McpServersSection({
               {s.url}
             </div>
           </div>
-          <button
-            onClick={() => handleDelete(s.name)}
-            disabled={deleting === s.name}
-            className="ml-2 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
-            title="Remove server"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          {s.name !== "gemini-websearch" && (
+            <button
+              onClick={() => handleDelete(s.name)}
+              disabled={deleting === s.name}
+              className="ml-2 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+              title="Remove server"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       ))}
 

@@ -64,7 +64,9 @@ pub(crate) fn build_chroot_dir(chroot_base: &Path, vm_id: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::process::{build_chroot_dir, build_vm_boot_args, prepare_jail_resources};
+    use std::net::Ipv4Addr;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn boot_args_includes_base_and_ip() {
@@ -159,7 +161,7 @@ mod tests {
 //   vmlinux                  <- kernel (hard-linked from host, or copied)
 //   rootfs.ext4              <- rootfs copy (written separately by copy_rootfs)
 pub(crate) async fn prepare_jail_resources(chroot_dir: &Path, kernel_src: &Path) -> Result<()> {
-    create_dir_all(chroot_dir.join("run")).await?;
+    create_dir_all(chroot_dir.join("run")).await.context("failed to create jail run directory")?;
     // Safety: this check-then-copy is not atomic, but concurrent VM creation
     // for the same user is prevented by acquire_provisioning_slot.
     let kernel_dst = chroot_dir.join("vmlinux");

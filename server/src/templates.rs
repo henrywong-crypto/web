@@ -58,7 +58,7 @@ pub(crate) fn render_terminal_page(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::templates::{render_login_page, render_terminal_page};
     use std::path::Path;
 
     #[test]

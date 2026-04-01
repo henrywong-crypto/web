@@ -4,7 +4,7 @@ use tracing::warn;
 
 use crate::network::delete_tap;
 
-pub async fn cleanup_stale_vms(net_helper_path: &Path, jailer_chroot_base: &Path) {
+pub async fn clean_stale_vms(net_helper_path: &Path, jailer_chroot_base: &Path) {
     stop_stale_firecracker_processes(jailer_chroot_base).await;
     delete_stale_tap_interfaces(net_helper_path).await;
     delete_stale_chroot_dirs(jailer_chroot_base).await;
@@ -20,7 +20,7 @@ async fn stop_stale_firecracker_processes(chroot_base: &Path) {
         let socket_path = entry.path().join("root/run/firecracker.socket");
         if socket_path.exists() {
             if let Err(e) = firecracker_client::stop_instance(&socket_path).await {
-                warn!("failed to stop stale VM");
+                warn!("failed to stop stale VM: {e}");
             }
         }
     }
@@ -45,7 +45,7 @@ async fn delete_stale_tap_interfaces(net_helper_path: &Path) {
     }
 }
 
-fn parse_tap_interface_name(line: &str) -> Option<&str> {
+pub(crate) fn parse_tap_interface_name(line: &str) -> Option<&str> {
     // lines look like: "5: tap0: <...> ..."
     let name = line.split(':').nth(1)?.trim();
     name.starts_with("tap").then_some(name)
@@ -70,11 +70,11 @@ async fn delete_stale_chroot_dirs(chroot_base: &Path) {
             let path = child.path();
             if path.is_dir() {
                 if let Err(e) = fs::remove_dir_all(&path).await {
-                    warn!("failed to remove stale dir");
+                    warn!("failed to remove stale dir: {e}");
                 }
             } else {
                 if let Err(e) = fs::remove_file(&path).await {
-                    warn!("failed to remove stale file");
+                    warn!("failed to remove stale file: {e}");
                 }
             }
         }
@@ -83,7 +83,7 @@ async fn delete_stale_chroot_dirs(chroot_base: &Path) {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::cleanup::parse_tap_interface_name;
 
     #[test]
     fn test_valid_tap_interface_extracted() {

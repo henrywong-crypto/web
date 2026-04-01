@@ -683,8 +683,12 @@ export async function setupApp(
       const url = new URL(route.request().url());
       const parts = url.pathname.split("/");
       lastMcpDeleteName = decodeURIComponent(parts[parts.length - 1]);
-      mcpServers = mcpServers.filter((s) => s.name !== lastMcpDeleteName);
-      await route.fulfill({ status: 204 });
+      if (lastMcpDeleteName === "gemini-websearch") {
+        await route.fulfill({ status: 403, body: "Cannot delete built-in server" });
+      } else {
+        mcpServers = mcpServers.filter((s) => s.name !== lastMcpDeleteName);
+        await route.fulfill({ status: 204 });
+      }
     } else {
       await route.continue();
     }
@@ -699,13 +703,17 @@ export async function setupApp(
           url: string;
           headers?: Record<string, string>;
         };
-        mcpServers.push({
-          name: lastMcpAddBody.name,
-          type: "http",
-          url: lastMcpAddBody.url,
-          headers: lastMcpAddBody.headers,
-        });
-        await route.fulfill({ status: 201 });
+        if (mcpServers.some((s) => s.name === lastMcpAddBody!.name)) {
+          await route.fulfill({ status: 409, body: "Server name already exists" });
+        } else {
+          mcpServers.push({
+            name: lastMcpAddBody.name,
+            type: "http",
+            url: lastMcpAddBody.url,
+            headers: lastMcpAddBody.headers,
+          });
+          await route.fulfill({ status: 201 });
+        }
       }
     } else {
       // GET

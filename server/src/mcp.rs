@@ -20,7 +20,7 @@ use crate::{
 struct McpServerEntry {
     name: String,
     #[serde(rename = "type")]
-    server_type: String,
+    type_: String,
     url: String,
     #[serde(skip_serializing_if = "HashMap::is_empty")]
     headers: HashMap<String, String>,
@@ -35,7 +35,7 @@ pub(crate) struct AddMcpServerBody {
 }
 
 /// Only allow server names that are safe identifiers.
-fn is_valid_server_name(name: &str) -> bool {
+pub(crate) fn is_valid_server_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
         && name
@@ -44,14 +44,14 @@ fn is_valid_server_name(name: &str) -> bool {
 }
 
 /// Only allow URL strings that look like valid HTTP(S) URLs.
-fn is_valid_url(url: &str) -> bool {
+pub(crate) fn is_valid_url(url: &str) -> bool {
     (url.starts_with("https://") || url.starts_with("http://"))
         && url.len() <= 2048
         && url.chars().all(|c| c.is_ascii_graphic())
 }
 
 /// Only allow header keys/values that are safe ASCII strings.
-fn is_valid_header(key: &str, value: &str) -> bool {
+pub(crate) fn is_valid_header(key: &str, value: &str) -> bool {
     !key.is_empty()
         && key.len() <= 256
         && key.chars().all(|c| c.is_ascii_graphic())
@@ -74,7 +74,7 @@ pub(crate) async fn list_handler(
     let entries: Vec<McpServerEntry> = servers
         .into_iter()
         .map(|(name, val)| {
-            let server_type = val
+            let type_ = val
                 .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("http")
@@ -95,7 +95,7 @@ pub(crate) async fn list_handler(
                 .unwrap_or_default();
             McpServerEntry {
                 name,
-                server_type,
+                type_,
                 url,
                 headers,
             }
@@ -129,6 +129,11 @@ pub(crate) async fn add_handler(
     )
     .await?;
 
+    let existing = parse_mcp_servers(raw.trim())?;
+    if existing.contains_key(&body.name) {
+        return Ok((StatusCode::CONFLICT, "Server name already exists").into_response());
+    }
+
     let mut server = serde_json::json!({
         "type": "http",
         "url": body.url,
@@ -158,6 +163,10 @@ pub(crate) async fn delete_handler(
         return Ok((StatusCode::BAD_REQUEST, "Invalid server name").into_response());
     }
 
+    if name == "gemini-websearch" {
+        return Ok((StatusCode::FORBIDDEN, "Cannot delete built-in server").into_response());
+    }
+
     let raw = get_vm_claude_json_raw(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
@@ -183,7 +192,7 @@ pub(crate) async fn delete_handler(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::mcp::{is_valid_header, is_valid_server_name, is_valid_url};
 
     // --- is_valid_server_name ---
 

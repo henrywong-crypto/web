@@ -19,6 +19,8 @@
  * MCP-18  Registration auth methods — passes token_endpoint_auth_methods_supported from metadata
  * MCP-19  Registration failure    — shows error message on registration failure
  * MCP-20  Auto-reg with secret   — auto-registration with client_secret shows OAuth ready
+ * MCP-21  Duplicate name blocked — adding a server with an existing name shows error
+ * MCP-22  gemini-websearch protected — no delete button for gemini-websearch
  */
 import { test, expect } from "@playwright/test";
 import { setupApp } from "./helpers/setup";
@@ -490,5 +492,46 @@ test.describe("mcp servers", () => {
 
     await expect(page.getByText("OAuth ready")).toBeVisible();
     await expect(page.getByText("Client registered automatically")).toBeVisible();
+  });
+
+  test("MCP-21 adding a server with duplicate name shows error", async ({
+    page,
+  }) => {
+    await setupApp(page, {
+      mcpServers: [
+        { name: "existing-server", type: "http", url: "https://existing.example.com/mcp" },
+      ],
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+    await page.getByText("Add Server").click();
+
+    await page.getByPlaceholder("Server name").fill("existing-server");
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://new.example.com/mcp");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await expect(page.getByText("Server name already exists")).toBeVisible();
+  });
+
+  test("MCP-22 gemini-websearch has no delete button", async ({ page }) => {
+    await setupApp(page, {
+      mcpServers: [
+        { name: "gemini-websearch", type: "http", url: "https://gemini.example.com/mcp" },
+        { name: "other-server", type: "http", url: "https://other.example.com/mcp" },
+      ],
+    });
+
+    await page.getByTitle("Settings").click();
+    await page.getByText("MCP Servers").click();
+
+    await expect(page.getByText("gemini-websearch")).toBeVisible();
+    await expect(page.getByText("other-server")).toBeVisible();
+
+    // Only one delete button should exist (for other-server, not gemini-websearch)
+    const deleteButtons = page.getByTitle("Remove server");
+    await expect(deleteButtons).toHaveCount(1);
   });
 });

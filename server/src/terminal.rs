@@ -49,11 +49,12 @@ pub(crate) async fn handle_ws_upgrade(
             return Ok((StatusCode::FORBIDDEN, "Origin mismatch").into_response());
         }
     }
+    let vm_id = user_vm.vm_id.clone();
     Ok(ws.on_upgrade(move |socket| async move {
         run_terminal_session(
             socket,
-            state,
-            user_vm.vm_id.clone(),
+            &state,
+            &vm_id,
             user_vm.user_id,
             user_vm.guest_ip,
         )
@@ -63,19 +64,19 @@ pub(crate) async fn handle_ws_upgrade(
 
 async fn run_terminal_session(
     ws: WebSocket,
-    state: AppState,
-    vm_id: String,
+    state: &AppState,
+    vm_id: &str,
     user_id: Uuid,
     guest_ip: Ipv4Addr,
 ) {
-    if update_vm_last_activity(&state.vms, &vm_id).is_err() {
+    if update_vm_last_activity(&state.vms, vm_id).is_err() {
         error!("vm registry lock poisoned, aborting terminal session");
         return;
     }
-    if run_ssh_relay(guest_ip, &state, &vm_id, ws).await.is_err() {
+    if run_ssh_relay(guest_ip, state, vm_id, ws).await.is_err() {
         error!("terminal session error");
     }
-    if save_and_drop_vm(&state, &vm_id, user_id).await.is_err() {
+    if save_and_drop_vm(state, vm_id, user_id).await.is_err() {
         error!("save and drop vm failed");
     }
 }
@@ -220,12 +221,18 @@ async fn send_ws_keepalive(ws_sender: &mut SplitSink<WebSocket, Message>) -> Res
     Ok(())
 }
 
-const MAX_TERMINAL_COLS: u32 = 500;
-const MAX_TERMINAL_ROWS: u32 = 500;
+pub(crate) const MAX_TERMINAL_COLS: u32 = 500;
+pub(crate) const MAX_TERMINAL_ROWS: u32 = 500;
 
-/// Parse a resize JSON message and return validated (cols, rows), or None if
+#[derive(Debug, PartialEq)]
+pub(crate) struct TerminalSize {
+    cols: u32,
+    rows: u32,
+}
+
+/// Parse a resize JSON message and return validated terminal size, or None if
 /// the message is not a resize or has invalid values.
-fn parse_resize_message(text: &str) -> Option<(u32, u32)> {
+pub(crate) fn parse_resize_message(text: &str) -> Option<TerminalSize> {
     let json = serde_json::from_str::<serde_json::Value>(text).ok()?;
     if json["type"] != "resize" {
         return None;
@@ -235,14 +242,14 @@ fn parse_resize_message(text: &str) -> Option<(u32, u32)> {
     if !(1..=MAX_TERMINAL_COLS).contains(&cols) || !(1..=MAX_TERMINAL_ROWS).contains(&rows) {
         return None;
     }
-    Some((cols, rows))
+    Some(TerminalSize { cols, rows })
 }
 
 async fn handle_resize_message(ssh_channel: &mut Channel<Msg>, text: &str) -> Result<()> {
-    if let Some((cols, rows)) = parse_resize_message(text) {
+    if let Some(terminal_size) = parse_resize_message(text) {
         timeout(
             Duration::from_secs(SEND_TIMEOUT_SECS),
-            ssh_channel.window_change(cols, rows, 0, 0),
+            ssh_channel.window_change(terminal_size.cols, terminal_size.rows, 0, 0),
         )
         .await
         .context("window_change timed out")?
@@ -253,12 +260,14 @@ async fn handle_resize_message(ssh_channel: &mut Channel<Msg>, text: &str) -> Re
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::terminal::{parse_resize_message, TerminalSize};
 
     #[test]
     fn resize_valid_cols_rows() {
         let msg = r#"{"type":"resize","cols":80,"rows":24}"#;
-        assert_eq!(parse_resize_message(msg), Some((80, 24)));
+        let terminal_size = parse_resize_message(msg).unwrap();
+        assert_eq!(terminal_size.cols, 80);
+        assert_eq!(terminal_size.rows, 24);
     }
 
     #[test]
@@ -288,7 +297,9 @@ mod tests {
     #[test]
     fn resize_at_max_accepted() {
         let msg = r#"{"type":"resize","cols":500,"rows":500}"#;
-        assert_eq!(parse_resize_message(msg), Some((500, 500)));
+        let terminal_size = parse_resize_message(msg).unwrap();
+        assert_eq!(terminal_size.cols, 500);
+        assert_eq!(terminal_size.rows, 500);
     }
 
     #[test]

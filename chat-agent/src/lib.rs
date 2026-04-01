@@ -32,7 +32,7 @@ pub enum AgentMessage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::AgentMessage;
     use serde_json::json;
 
     #[test]

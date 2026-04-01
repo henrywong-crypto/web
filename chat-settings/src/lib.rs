@@ -252,7 +252,10 @@ async fn write_file_via_ssh(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::{
+        build_api_key_settings_json, build_bedrock_settings_json, parse_mcp_servers,
+        parse_vm_settings, remove_mcp_server, upsert_mcp_server,
+    };
 
     // --- parse_vm_settings ---
 

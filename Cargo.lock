@@ -1590,7 +1590,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
- "common",
  "firecracker-client",
  "ipnetwork",
  "macaddr",
@@ -4118,6 +4117,7 @@ dependencies = [
  "anyhow",
  "authorize",
  "axum",
+ "base64",
  "bytes",
  "chat-agent",
  "chat-history",
@@ -4139,6 +4139,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sftp-client",
+ "sha2 0.10.9",
  "sqlx",
  "ssh-client",
  "store",

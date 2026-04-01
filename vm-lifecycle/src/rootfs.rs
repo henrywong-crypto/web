@@ -72,7 +72,9 @@ pub async fn save_all_vm_rootfs(vms: &VmRegistry) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::rootfs::{build_chroot_rootfs_path, find_user_rootfs};
+    use std::path::{Path, PathBuf};
+    use uuid::Uuid;
 
     #[test]
     fn build_chroot_rootfs_path_format() {

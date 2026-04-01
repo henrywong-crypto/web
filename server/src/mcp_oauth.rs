@@ -22,26 +22,26 @@ use crate::{
 // ── PKCE helpers ─────────────────────────────────────────────────────────
 
 /// Generate a cryptographically random code_verifier (43–128 chars, unreserved charset).
-fn generate_code_verifier() -> String {
+pub(crate) fn generate_code_verifier() -> String {
     let bytes: [u8; 32] = rand::rng().random();
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Compute S256 code_challenge from a code_verifier.
-fn compute_code_challenge(verifier: &str) -> String {
+pub(crate) fn compute_code_challenge(verifier: &str) -> String {
     let digest = Sha256::digest(verifier.as_bytes());
     URL_SAFE_NO_PAD.encode(digest)
 }
 
 /// Generate a random state nonce for CSRF protection.
-fn generate_state() -> String {
+pub(crate) fn generate_state() -> String {
     let bytes: [u8; 16] = rand::rng().random();
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
 /// Extract origin (scheme + host + port) and path component from a URL.
 /// Path has trailing slash stripped. Returns (origin, path) where path may be empty.
-fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
+pub(crate) fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
     let parsed = Url::parse(raw_url)?;
     let mut origin = format!("{}://{}", parsed.scheme(), parsed.host_str().unwrap_or(""));
     if let Some(port) = parsed.port() {
@@ -52,7 +52,7 @@ fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
 }
 
 /// Build RFC 9728 protected resource discovery URLs for a given MCP resource URL.
-fn build_protected_resource_urls(origin: &str, path: &str) -> Vec<String> {
+pub(crate) fn build_protected_resource_urls(origin: &str, path: &str) -> Vec<String> {
     if path.is_empty() {
         vec![format!("{origin}/.well-known/oauth-protected-resource")]
     } else {
@@ -64,7 +64,7 @@ fn build_protected_resource_urls(origin: &str, path: &str) -> Vec<String> {
 }
 
 /// Build RFC 8414 / OIDC authorization server metadata discovery URLs.
-fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) -> Vec<String> {
+pub(crate) fn build_auth_server_discovery_urls(origin: &str, path: &str, full_url: &str) -> Vec<String> {
     if path.is_empty() {
         vec![
             format!("{origin}/.well-known/oauth-authorization-server"),
@@ -321,7 +321,7 @@ pub(crate) async fn register_handler(
 
     if !resp.status().is_success() {
         let status = resp.status();
-        let body_text = resp.text().await.unwrap_or_default();
+        let body_text = resp.text().await.context("failed to read registration error body")?;
         error!("mcp oauth registration failed: {status} {body_text}");
         return Ok((
             StatusCode::BAD_GATEWAY,
@@ -447,7 +447,7 @@ pub(crate) async fn callback_handler(
     let client_secret = session
         .remove::<String>("mcp_oauth_client_secret")
         .await
-        .unwrap_or(None);
+        .context("failed to retrieve client secret")?;
     let mcp_url = session
         .remove::<String>("mcp_oauth_mcp_url")
         .await
@@ -490,7 +490,13 @@ pub(crate) async fn callback_handler(
 
     if !token_resp.status().is_success() {
         let status = token_resp.status();
-        let body = token_resp.text().await.unwrap_or_default();
+        let body = match token_resp.text().await {
+            Ok(t) => t,
+            Err(e) => {
+                error!("failed to read token error body: {e}");
+                String::new()
+            }
+        };
         error!("token exchange failed: {status} {body}");
         return Ok(oauth_close_page("error", Some("token_exchange")));
     }
@@ -503,14 +509,32 @@ pub(crate) async fn callback_handler(
     info!("mcp oauth token exchange successful for server: {server_name}");
 
     // Read current ~/.claude.json from VM (UserVm extractor handles auth + VM provisioning)
-    let raw = get_vm_claude_json_raw(
+    let raw = match get_vm_claude_json_raw(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
         &state.config.vm_host_key_path,
     )
     .await
-    .unwrap_or_else(|_| "{}".to_string());
+    {
+        Ok(r) => r,
+        Err(e) => {
+            error!("failed to read VM claude.json: {e}");
+            return Ok(oauth_close_page("error", Some("config_read")));
+        }
+    };
+
+    // Reject if server name already exists
+    let existing = match chat_settings::parse_mcp_servers(raw.trim()) {
+        Ok(servers) => servers,
+        Err(e) => {
+            error!("failed to parse MCP servers: {e}");
+            return Ok(oauth_close_page("error", Some("config_parse")));
+        }
+    };
+    if existing.contains_key(&server_name) {
+        return Ok(oauth_close_page("error", Some("name_exists")));
+    }
 
     // Build MCP server entry with OAuth token
     let mut server = serde_json::json!({
@@ -548,7 +572,10 @@ pub(crate) async fn callback_handler(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::mcp_oauth::{
+        build_auth_server_discovery_urls, build_protected_resource_urls, compute_code_challenge,
+        generate_code_verifier, generate_state, origin_and_path,
+    };
 
     // ── PKCE tests ──────────────────────────────────────────────────────
 

@@ -3,7 +3,7 @@ use bytes::Bytes;
 use futures::stream::Stream;
 use russh::{Channel, ChannelMsg, client};
 use ssh_client::SshClient;
-use std::{net::Ipv4Addr, path::PathBuf};
+use std::{net::Ipv4Addr, path::{Path, PathBuf}};
 use tokio::{
     sync::mpsc,
     time::{Duration, interval, timeout},
@@ -31,9 +31,9 @@ pub fn stream_task_sse(
     tokio::spawn(async move {
         if let Err(e) = run_task_stream(
             guest_ip,
-            ssh_key_path,
-            ssh_user,
-            vm_host_key_path,
+            &ssh_key_path,
+            &ssh_user,
+            &vm_host_key_path,
             message,
             tx.clone(),
         )
@@ -47,9 +47,9 @@ pub fn stream_task_sse(
 
 async fn run_task_stream(
     guest_ip: Ipv4Addr,
-    ssh_key_path: PathBuf,
-    ssh_user: String,
-    vm_host_key_path: PathBuf,
+    ssh_key_path: &Path,
+    ssh_user: &str,
+    vm_host_key_path: &Path,
     message: AgentMessage,
     tx: mpsc::Sender<Bytes>,
 ) -> Result<()> {
@@ -59,7 +59,7 @@ async fn run_task_stream(
     // then open_agent_channel retries the Unix socket for another 60s (agent process may still be
     // starting). Total worst-case connect time is ~120s.
     let connect_future =
-        connect_ssh_and_open_channel(guest_ip, &ssh_key_path, &ssh_user, &vm_host_key_path);
+        connect_ssh_and_open_channel(guest_ip, ssh_key_path, ssh_user, vm_host_key_path);
     tokio::pin!(connect_future);
     let connect_result = loop {
         tokio::select! {
@@ -129,7 +129,7 @@ async fn send_sse(tx: &mpsc::Sender<Bytes>, data: Bytes) -> bool {
     }
 }
 
-fn build_sse_error_event(e: anyhow::Error) -> Result<Bytes> {
+pub(crate) fn build_sse_error_event(e: anyhow::Error) -> Result<Bytes> {
     let payload = serde_json::json!({ "message": e.to_string() });
     let serialized = serde_json::to_string(&payload)?;
     Ok(Bytes::from(format!(
@@ -194,7 +194,7 @@ async fn stream_ssh_channel(
 
 /// Check if the raw SSE data contains a `done` or `error_event` line,
 /// indicating the task is finished and the stream should close.
-fn data_contains_terminal_event(data: &[u8]) -> bool {
+pub(crate) fn data_contains_terminal_event(data: &[u8]) -> bool {
     data.windows(b"event: done\n".len())
         .any(|w| w == b"event: done\n")
         || data
@@ -204,7 +204,7 @@ fn data_contains_terminal_event(data: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::relay::{build_sse_error_event, data_contains_terminal_event};
 
     #[test]
     fn terminal_event_done() {
