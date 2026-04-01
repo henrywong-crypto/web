@@ -33,6 +33,7 @@ pub enum AgentMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     #[test]
     fn query_serializes_with_all_fields() {

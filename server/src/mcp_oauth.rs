@@ -492,8 +492,8 @@ pub(crate) async fn callback_handler(
         let status = token_resp.status();
         let body = match token_resp.text().await {
             Ok(t) => t,
-            Err(e) => {
-                error!("failed to read token error body: {e}");
+            Err(_) => {
+                error!("failed to read token error body");
                 String::new()
             }
         };
@@ -518,8 +518,8 @@ pub(crate) async fn callback_handler(
     .await
     {
         Ok(r) => r,
-        Err(e) => {
-            error!("failed to read VM claude.json: {e}");
+        Err(_) => {
+            error!("failed to read VM claude.json");
             return Ok(oauth_close_page("error", Some("config_read")));
         }
     };
@@ -527,8 +527,8 @@ pub(crate) async fn callback_handler(
     // Reject if server name already exists
     let existing = match chat_settings::parse_mcp_servers(raw.trim()) {
         Ok(servers) => servers,
-        Err(e) => {
-            error!("failed to parse MCP servers: {e}");
+        Err(_) => {
+            error!("failed to parse MCP servers");
             return Ok(oauth_close_page("error", Some("config_parse")));
         }
     };
@@ -552,7 +552,7 @@ pub(crate) async fn callback_handler(
     let updated = upsert_mcp_server(raw.trim(), &server_name, server)
         .map_err(|e| anyhow::anyhow!("failed to upsert MCP server config: {e}"))?;
 
-    if let Err(e) = set_vm_claude_json(
+    if let Err(_) = set_vm_claude_json(
         user_vm.guest_ip,
         &state.config.ssh_key_path,
         &state.config.ssh_user,
@@ -561,7 +561,7 @@ pub(crate) async fn callback_handler(
     )
     .await
     {
-        error!("mcp oauth callback: failed to write ~/.claude.json to VM: {e}");
+        error!("mcp oauth callback: failed to write ~/.claude.json to VM");
         return Ok(oauth_close_page("error", Some("write_failed")));
     }
 

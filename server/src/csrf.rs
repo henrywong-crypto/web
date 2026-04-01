@@ -81,6 +81,8 @@ fn attach_csrf_token<B>(response: &mut axum::http::Response<B>, csrf_token: &str
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::Response as HttpResponse;
+    use std::collections::HashSet;
 
     // --- constant_time_eq tests ---
 

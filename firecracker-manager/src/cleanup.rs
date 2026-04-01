@@ -19,13 +19,11 @@ async fn stop_stale_firecracker_processes(chroot_base: &Path) {
     while let Ok(Some(entry)) = entries.next_entry().await {
         let socket_path = entry.path().join("root/run/firecracker.socket");
         if socket_path.exists() {
-            if let Err(e) = firecracker_client::stop_instance(&socket_path).await {
-                warn!("failed to stop stale VM: {e}");
+            if let Err(_) = firecracker_client::stop_instance(&socket_path).await {
+                warn!("failed to stop stale VM");
             }
         }
     }
-    // Give processes time to exit after receiving shutdown
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 }
 
 async fn delete_stale_tap_interfaces(net_helper_path: &Path) {
@@ -69,12 +67,12 @@ async fn delete_stale_chroot_dirs(chroot_base: &Path) {
             }
             let path = child.path();
             if path.is_dir() {
-                if let Err(e) = fs::remove_dir_all(&path).await {
-                    warn!("failed to remove stale dir: {e}");
+                if let Err(_) = fs::remove_dir_all(&path).await {
+                    warn!("failed to remove stale dir");
                 }
             } else {
-                if let Err(e) = fs::remove_file(&path).await {
-                    warn!("failed to remove stale file: {e}");
+                if let Err(_) = fs::remove_file(&path).await {
+                    warn!("failed to remove stale file");
                 }
             }
         }

@@ -21,12 +21,12 @@ pub(crate) async fn create_tap(
 }
 
 pub(crate) async fn delete_tap(net_helper_path: &Path, tap_name: &str) {
-    if let Err(e) = Command::new(net_helper_path)
+    if let Err(_) = Command::new(net_helper_path)
         .args(["tap-delete", tap_name])
         .status()
         .await
     {
-        warn!("failed to delete tap {tap_name}: {e}");
+        warn!("failed to delete tap {tap_name}");
     }
 }
 
@@ -49,8 +49,8 @@ pub(crate) fn format_guest_mac(idx: u8) -> MacAddr6 {
 pub async fn setup_host_networking(net_helper_path: &Path) -> Result<()> {
     let host_iface = match fetch_host_iface_name().await {
         Ok(iface) => iface,
-        Err(e) => {
-            warn!("could not determine host interface, skipping NAT setup: {e}");
+        Err(_) => {
+            warn!("could not determine host interface, skipping NAT setup");
             return Ok(());
         }
     };
