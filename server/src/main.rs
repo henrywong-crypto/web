@@ -31,7 +31,6 @@ use tokio::{net::TcpListener, signal, sync::oneshot, task::AbortHandle};
 use tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer, cookie::SameSite};
 use tower_sessions_sqlx_store::PostgresStore;
 use tracing::info;
-use tracing_subscriber::EnvFilter;
 use vm_lifecycle::{refresh_all_vm_mmds, save_all_vm_rootfs, sweep_idle_vms};
 
 use crate::{
@@ -69,8 +68,8 @@ use crate::{
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or(EnvFilter::new("info")),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or(tracing_subscriber::EnvFilter::new("info")),
         )
         .init();
     let app_config = load_config()?;

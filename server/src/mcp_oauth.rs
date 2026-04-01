@@ -10,6 +10,7 @@ use chat_settings::{get_vm_claude_json_raw, set_vm_claude_json, upsert_mcp_serve
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use subtle::ConstantTimeEq;
 use tower_sessions::Session;
 use tracing::{error, info};
 use url::Url;
@@ -49,6 +50,30 @@ fn origin_and_path(raw_url: &str) -> Result<(String, String), url::ParseError> {
     }
     let path = parsed.path().trim_end_matches('/').to_string();
     Ok((origin, path))
+}
+
+/// Reject URLs that target internal/metadata IP ranges (SSRF protection).
+fn is_safe_url(raw_url: &str) -> bool {
+    let Ok(parsed) = Url::parse(raw_url) else {
+        return false;
+    };
+    if parsed.scheme() != "https" {
+        return false;
+    }
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            !ip.is_loopback()
+                && !ip.is_private()
+                && !ip.is_link_local()
+                && !ip.is_unspecified()
+                && !ip.is_broadcast()
+                // AWS metadata endpoint
+                && ip != std::net::Ipv4Addr::new(169, 254, 169, 254)
+        }
+        Some(url::Host::Ipv6(ip)) => !ip.is_loopback() && !ip.is_unspecified(),
+        Some(url::Host::Domain(d)) => d != "localhost",
+        None => false,
+    }
 }
 
 /// Build RFC 9728 protected resource discovery URLs for a given MCP resource URL.
@@ -192,6 +217,10 @@ struct TokenResponse {
 pub(crate) async fn discover_handler(
     Query(query): Query<DiscoverQuery>,
 ) -> Result<Response, AppError> {
+    if !is_safe_url(&query.url) {
+        return Ok((StatusCode::BAD_REQUEST, "Invalid URL").into_response());
+    }
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -272,6 +301,10 @@ pub(crate) async fn discover_handler(
 pub(crate) async fn register_handler(
     Json(body): Json<RegisterBody>,
 ) -> Result<Response, AppError> {
+    if !is_safe_url(&body.registration_endpoint) {
+        return Ok((StatusCode::BAD_REQUEST, "Invalid registration endpoint").into_response());
+    }
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(10))
         .build()
@@ -423,7 +456,10 @@ pub(crate) async fn callback_handler(
         .await
         .context("failed to retrieve oauth state from session")?;
 
-    if stored_state.as_deref() != Some(&query.state) {
+    if !stored_state
+        .as_deref()
+        .is_some_and(|s| s.len() == query.state.len() && s.as_bytes().ct_eq(query.state.as_bytes()).unwrap_u8() == 1)
+    {
         error!("mcp oauth state mismatch");
         return Ok(oauth_close_page("error", Some("state_mismatch")));
     }

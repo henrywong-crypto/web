@@ -392,8 +392,8 @@ pub(crate) async fn vm_status_handler(
                 }
                 drop(new_vm.provisioning_guard);
             }
-            Err(e) => {
-                error!("background vm provisioning failed: {}", e.0);
+            Err(_) => {
+                error!("background vm provisioning failed");
             }
         }
     });

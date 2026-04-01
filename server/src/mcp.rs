@@ -10,6 +10,8 @@ use chat_settings::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use url::Url;
+use validator::Validate;
 
 use crate::{
     handlers::UserVm,
@@ -26,28 +28,46 @@ struct McpServerEntry {
     headers: HashMap<String, String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub(crate) struct AddMcpServerBody {
+    #[validate(length(min = 1, max = 128), custom(function = "validate_server_name"))]
     name: String,
+    #[validate(length(min = 1, max = 2048), custom(function = "validate_url"))]
     url: String,
     #[serde(default)]
     headers: HashMap<String, String>,
 }
 
-/// Only allow server names that are safe identifiers.
+fn validate_server_name(name: &str) -> Result<(), validator::ValidationError> {
+    if name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        Ok(())
+    } else {
+        Err(validator::ValidationError::new("invalid_server_name"))
+    }
+}
+
+fn validate_url(url: &str) -> Result<(), validator::ValidationError> {
+    let parsed =
+        Url::parse(url).map_err(|_| validator::ValidationError::new("invalid_url"))?;
+    if (parsed.scheme() != "https" && parsed.scheme() != "http") || parsed.as_str() != url {
+        return Err(validator::ValidationError::new("invalid_url"));
+    }
+    Ok(())
+}
+
+fn is_valid_url(url: &str) -> bool {
+    url.len() <= 2048 && validate_url(url).is_ok()
+}
+
 fn is_valid_server_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-}
-
-/// Only allow URL strings that look like valid HTTP(S) URLs.
-fn is_valid_url(url: &str) -> bool {
-    (url.starts_with("https://") || url.starts_with("http://"))
-        && url.len() <= 2048
-        && url.chars().all(|c| c.is_ascii_graphic())
 }
 
 /// Only allow header keys/values that are safe ASCII strings.
@@ -109,11 +129,8 @@ pub(crate) async fn add_handler(
     State(state): State<AppState>,
     Json(body): Json<AddMcpServerBody>,
 ) -> Result<Response, AppError> {
-    if !is_valid_server_name(&body.name) {
-        return Ok((StatusCode::BAD_REQUEST, "Invalid server name").into_response());
-    }
-    if !is_valid_url(&body.url) {
-        return Ok((StatusCode::BAD_REQUEST, "Invalid URL").into_response());
+    if let Err(_) = body.validate() {
+        return Ok((StatusCode::BAD_REQUEST, "Invalid server name or URL").into_response());
     }
     for (key, value) in &body.headers {
         if !is_valid_header(key, value) {
