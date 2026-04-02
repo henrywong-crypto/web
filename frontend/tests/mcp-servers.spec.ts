@@ -203,18 +203,28 @@ test.describe("mcp servers", () => {
     await expect(saveBtn).toBeEnabled();
   });
 
-  test("MCP-10 Detect Auth button appears next to URL field", async ({
+  test("MCP-10 URL field auto-detects OAuth on blur", async ({
     page,
   }) => {
-    await setupApp(page, { mcpServers: [] });
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+      },
+    });
 
     await page.getByTitle("Settings").click();
     await page.getByText("MCP Servers").click();
     await page.getByText("Add Server").click();
 
-    await expect(
-      page.getByRole("button", { name: "Detect Auth" }),
-    ).toBeVisible();
+    await page
+      .getByPlaceholder("https://example.com/mcp")
+      .fill("https://mcp.example.com/v1");
+    await page.getByPlaceholder("https://example.com/mcp").blur();
+
+    // Auto-detection should trigger and find OAuth
+    await expect(page.getByText("OAuth required")).toBeVisible();
   });
 
   test("MCP-11 Detect Auth shows OAuth required when OAuth metadata found", async ({
@@ -236,7 +246,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.figma.com/v1");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
 
     await expect(page.getByText("OAuth required")).toBeVisible();
     await expect(
@@ -259,7 +269,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://simple.example.com/mcp");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
 
     // Should still show manual headers + Save
     await expect(
@@ -271,18 +281,28 @@ test.describe("mcp servers", () => {
     ).not.toBeVisible();
   });
 
-  test("MCP-13 Detect Auth button disabled when URL is empty", async ({
+  test("MCP-13 No auto-detect when URL is empty", async ({
     page,
   }) => {
-    await setupApp(page, { mcpServers: [] });
+    await setupApp(page, {
+      mcpServers: [],
+      mcpOAuthMetadata: {
+        authorization_endpoint: "https://auth.example.com/authorize",
+        token_endpoint: "https://auth.example.com/token",
+      },
+    });
 
     await page.getByTitle("Settings").click();
     await page.getByText("MCP Servers").click();
     await page.getByText("Add Server").click();
 
-    const detectBtn = page.getByRole("button", { name: "Detect Auth" });
-    // URL is empty — button should be disabled
-    await expect(detectBtn).toBeDisabled();
+    // Blur empty URL field — should not trigger detection
+    await page.getByPlaceholder("https://example.com/mcp").focus();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
+
+    // No OAuth detection should appear, manual headers form should still be visible
+    await expect(page.getByText("Checking for OAuth")).not.toBeVisible();
+    await expect(page.getByText("OAuth detected")).not.toBeVisible();
   });
 
   test("MCP-14 Changing URL resets OAuth detection", async ({ page }) => {
@@ -301,7 +321,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://oauth.example.com/mcp");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
     await expect(page.getByText("OAuth required")).toBeVisible();
 
     // Change URL — OAuth state should reset
@@ -331,7 +351,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com/v1");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
 
     // Auto-registration should succeed and show "OAuth ready"
     await expect(page.getByText("OAuth ready")).toBeVisible();
@@ -365,7 +385,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com/v1");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
     await expect(page.getByText("OAuth ready")).toBeVisible();
 
     // Register interceptors AFTER setupApp so they have higher priority.
@@ -419,7 +439,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
 
     // Should detect OAuth and show the auth flow UI
     await expect(page.getByText("OAuth required")).toBeVisible();
@@ -449,7 +469,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.figma.com/mcp");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
     await expect(page.getByText("OAuth ready")).toBeVisible();
 
     const regBody = ctrl.lastMcpRegister();
@@ -477,7 +497,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
 
     // Should show OAuth required with error details
     await expect(page.getByText("Auto-registration failed")).toBeVisible();
@@ -506,7 +526,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.figma.com/mcp");
-    await page.getByRole("button", { name: "Detect Auth" }).click();
+    await page.getByPlaceholder("https://example.com/mcp").blur();
 
     await expect(page.getByText("OAuth ready")).toBeVisible();
     await expect(

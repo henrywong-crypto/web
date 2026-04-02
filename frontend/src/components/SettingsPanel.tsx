@@ -780,7 +780,7 @@ function McpServersSection({
                 Server URL
               </span>
             </div>
-            <div className="flex gap-2">
+            <div>
               <input
                 type="text"
                 value={formUrl}
@@ -789,23 +789,20 @@ function McpServersSection({
                   setOauthDetected(false);
                   setOauthMetadata(null);
                 }}
+                onBlur={() => {
+                  if (formUrl.trim() && !oauthDetected && !detecting) {
+                    handleDetectAuth();
+                  }
+                }}
                 placeholder="https://example.com/mcp"
-                className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
               />
-              <button
-                onClick={handleDetectAuth}
-                disabled={!formUrl.trim() || detecting}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-all disabled:opacity-40 ${
-                  oauthDetected
-                    ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                    : detecting
-                      ? "border border-primary/40 bg-primary/10 text-primary animate-pulse"
-                      : "border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/60"
-                }`}
-                title="Detect if this server requires OAuth"
-              >
-                {detecting ? "Checking…" : oauthDetected ? "✓ Detected" : "Detect Auth"}
-              </button>
+              {detecting && (
+                <p className="mt-1.5 text-xs text-primary animate-pulse">Checking for OAuth…</p>
+              )}
+              {oauthDetected && (
+                <p className="mt-1.5 text-xs text-emerald-400">✓ OAuth detected</p>
+              )}
             </div>
           </div>
 
