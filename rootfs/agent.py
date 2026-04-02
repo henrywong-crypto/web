@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.14"
-# dependencies = ["claude-agent-sdk>=0.1.50"]
+# dependencies = ["claude-agent-sdk>=0.1.52"]
 # ///
 import asyncio
 import contextvars
@@ -17,6 +17,12 @@ QUESTION_TIMEOUT_SECS = 3600
 MCP_PROXY_PORT = 8443
 # Replaced by build_rootfs.py when --mcp-base-url is provided.
 MCP_SERVERS: dict = {}
+
+# Override the entrypoint so sessions created via the SDK are visible to the CLI's /resume.
+# The SDK normally sets CLAUDE_CODE_ENTRYPOINT=sdk-py, which makes sessions invisible to
+# the CLI. Setting it to "cli" before the SDK spawns Claude Code makes sessions appear
+# in both the CLI and web UI.
+os.environ["CLAUDE_CODE_ENTRYPOINT"] = "cli"
 
 
 def load_mcp_servers() -> dict:
