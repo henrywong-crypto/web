@@ -766,156 +766,111 @@ function McpServersSection({
             className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
           />
 
-          {/* Step 1: URL + Detect Auth */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                oauthDetected
-                  ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30"
-                  : "bg-primary/15 text-primary ring-1 ring-primary/30"
-              }`}>
-                {oauthDetected ? "✓" : "1"}
-              </span>
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Server URL
-              </span>
-            </div>
-            <div>
-              <input
-                type="text"
-                value={formUrl}
-                onChange={(e) => {
-                  setFormUrl(e.target.value);
-                  setOauthDetected(false);
-                  setOauthMetadata(null);
-                }}
-                onBlur={() => {
-                  if (formUrl.trim() && !oauthDetected && !detecting) {
-                    handleDetectAuth();
-                  }
-                }}
-                placeholder="https://example.com/mcp"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-              />
-              {detecting && (
-                <p className="mt-1.5 text-xs text-primary animate-pulse">Checking for OAuth…</p>
-              )}
-              {oauthDetected && (
-                <p className="mt-1.5 text-xs text-emerald-400">✓ OAuth detected</p>
-              )}
-            </div>
+          <div>
+            <input
+              type="text"
+              value={formUrl}
+              onChange={(e) => {
+                setFormUrl(e.target.value);
+                setOauthDetected(false);
+                setOauthMetadata(null);
+              }}
+              onBlur={() => {
+                if (formUrl.trim() && !oauthDetected && !detecting) {
+                  handleDetectAuth();
+                }
+              }}
+              placeholder="https://example.com/mcp"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+            />
+            {detecting && (
+              <p className="mt-1.5 text-xs text-primary animate-pulse">Checking for OAuth…</p>
+            )}
+            {oauthDetected && (
+              <p className="mt-1.5 text-xs text-emerald-400">✓ OAuth detected</p>
+            )}
           </div>
 
           {oauthDetected && oauthMetadata ? (
             <div className="space-y-3">
-              {/* Step 2: Registration */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                    oauthClientId
-                      ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30"
-                      : "bg-primary/15 text-primary ring-1 ring-primary/30 animate-pulse"
-                  }`}>
-                    {oauthClientId ? "✓" : "2"}
-                  </span>
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Client Registration
-                  </span>
+              {oauthClientId ? (
+                <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-3 py-2">
+                  <p className="text-sm font-medium text-foreground">
+                    OAuth ready
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Client registered automatically. Click below to authorize.
+                  </p>
                 </div>
-
-                {oauthClientId ? (
-                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-950/20 px-3 py-2">
+              ) : (
+                <>
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
                     <p className="text-sm font-medium text-foreground">
-                      OAuth ready
+                      OAuth required
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Client registered automatically. Click below to authorize.
+                      {regError
+                        ? "Auto-registration failed. Create an OAuth app in the provider's developer settings and enter the Client ID below."
+                        : "Auto-registration not supported by this server. Create an OAuth app in the provider's developer settings and enter the Client ID below."}{" "}
+                      Set the redirect URI to:{" "}
+                      <code className="rounded bg-muted px-1 py-0.5 text-foreground">
+                        {typeof window !== "undefined"
+                          ? `${window.location.origin}/callback/mcp-oauth`
+                          : "/callback/mcp-oauth"}
+                      </code>
                     </p>
+                    {regError && (
+                      <p className="mt-1 text-xs text-red-400">{regError}</p>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
-                      <p className="text-sm font-medium text-foreground">
-                        OAuth required
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {regError
-                          ? "Auto-registration failed. Create an OAuth app in the provider's developer settings and enter the Client ID below."
-                          : "Auto-registration not supported by this server. Create an OAuth app in the provider's developer settings and enter the Client ID below."}{" "}
-                        Set the redirect URI to:{" "}
-                        <code className="rounded bg-muted px-1 py-0.5 text-foreground">
-                          {typeof window !== "undefined"
-                            ? `${window.location.origin}/callback/mcp-oauth`
-                            : "/callback/mcp-oauth"}
-                        </code>
-                      </p>
-                      {regError && (
-                        <p className="mt-1 text-xs text-red-400">{regError}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={oauthClientId}
-                        onChange={(e) => setOauthClientId(e.target.value)}
-                        placeholder="Client ID"
-                        className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-                      />
-                      {oauthMetadata.registration_endpoint && (
-                        <button
-                          onClick={handleAutoRegister}
-                          disabled={registering}
-                          className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
-                          title="Retry auto-registration"
-                        >
-                          {registering ? "Trying…" : "Retry"}
-                        </button>
-                      )}
-                    </div>
+                  <div className="flex gap-2">
                     <input
-                      type="password"
-                      value={oauthClientSecret}
-                      onChange={(e) => setOauthClientSecret(e.target.value)}
-                      placeholder="Client Secret (optional)"
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                      type="text"
+                      value={oauthClientId}
+                      onChange={(e) => setOauthClientId(e.target.value)}
+                      placeholder="Client ID"
+                      className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
                     />
-                  </>
-                )}
-              </div>
+                    {oauthMetadata.registration_endpoint && (
+                      <button
+                        onClick={handleAutoRegister}
+                        disabled={registering}
+                        className="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                        title="Retry auto-registration"
+                      >
+                        {registering ? "Trying…" : "Retry"}
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="password"
+                    value={oauthClientSecret}
+                    onChange={(e) => setOauthClientSecret(e.target.value)}
+                    placeholder="Client Secret (optional)"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                  />
+                </>
+              )}
 
-              {/* Step 3: Authorize */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
-                    authorizing
-                      ? "bg-primary/15 text-primary ring-1 ring-primary/30 animate-pulse"
-                      : !formName.trim() || !oauthClientId.trim()
-                        ? "bg-muted text-muted-foreground ring-1 ring-border"
-                        : "bg-primary/15 text-primary ring-1 ring-primary/30"
-                  }`}>
-                    3
-                  </span>
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Authorize
-                  </span>
-                </div>
-                <button
-                  onClick={handleOAuthAuthorize}
-                  disabled={
-                    !formName.trim() || !oauthClientId.trim() || authorizing
-                  }
-                  className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
-                    authorizing
-                      ? "bg-primary/20 text-primary animate-pulse border border-primary/30"
-                      : !formName.trim() || !oauthClientId.trim()
-                        ? "bg-muted text-muted-foreground cursor-not-allowed"
-                        : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/25"
-                  }`}
-                >
-                  <ExternalLink className="h-3.5 w-3.5" />
-                  {authorizing ? "Redirecting…" : "Authorize with OAuth"}
-                </button>
-              </div>
+              <button
+                onClick={handleOAuthAuthorize}
+                disabled={
+                  !formName.trim() || !oauthClientId.trim() || authorizing
+                }
+                className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                  authorizing
+                    ? "bg-primary/20 text-primary animate-pulse border border-primary/30"
+                    : !formName.trim() || !oauthClientId.trim()
+                      ? "bg-muted text-muted-foreground cursor-not-allowed"
+                      : "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm shadow-primary/25"
+                }`}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {authorizing ? "Redirecting…" : "Authorize with OAuth"}
+              </button>
+              {!formName.trim() && oauthClientId.trim() && !authorizing && (
+                <p className="text-xs text-amber-400/80">Enter a server name above to continue.</p>
+              )}
             </div>
           ) : (
             <>
@@ -927,8 +882,7 @@ function McpServersSection({
                 className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 resize-none"
               />
               <p className="text-xs text-muted-foreground">
-                Headers (Key=Value per line), or use Detect Auth for OAuth
-                servers.
+                Headers (Key=Value per line). OAuth is detected automatically.
               </p>
             </>
           )}
