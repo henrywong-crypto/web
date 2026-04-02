@@ -6,6 +6,7 @@ mod files;
 mod gateway_auth;
 mod gateway_callback;
 mod handlers;
+mod http_client;
 mod mcp;
 mod mcp_oauth;
 mod settings;
@@ -15,6 +16,10 @@ mod templates;
 mod terminal;
 mod upload;
 
+#[cfg(test)]
+mod test_helpers;
+
+use std::sync::Arc;
 use anyhow::{Context, Result};
 use axum::{
     Router,
@@ -82,7 +87,17 @@ async fn main() -> Result<()> {
     let pg_pool = store::connect_db(&app_config.database_url).await?;
     store::run_migrations(&pg_pool).await?;
     let session_store_handle = create_session_store(pg_pool.clone()).await?;
-    let app_state = AppState::new(app_config, pg_pool, static_assets);
+    let vm_config_ops: Arc<dyn chat_settings::VmConfigOps> =
+        Arc::new(chat_settings::SshVmConfigOps {
+            ssh_key_path: app_config.ssh_key_path.clone(),
+            ssh_user: app_config.ssh_user.clone(),
+            vm_host_key_path: app_config.vm_host_key_path.clone(),
+        });
+    let http_client: Arc<dyn http_client::HttpClient> = Arc::new(
+        http_client::ReqwestHttpClient::new(std::time::Duration::from_secs(15))
+            .expect("failed to build HTTP client"),
+    );
+    let app_state = AppState::new(app_config, pg_pool, static_assets, vm_config_ops, http_client);
     let port = app_state.config.port;
     clean_stale_vms(
         &app_state.config.net_helper_path,

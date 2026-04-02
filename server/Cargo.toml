@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.102"
+async-trait = "0.1"
 axum = { version = "0.8.8", features = ["multipart", "ws"] }
 base64 = "0.22.1"
 bytes = "1.11.1"

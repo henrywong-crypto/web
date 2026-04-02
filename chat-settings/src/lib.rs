@@ -1,8 +1,9 @@
 use anyhow::{Context, Result, anyhow};
+use async_trait::async_trait;
 use bytes::Bytes;
 use russh::{ChannelMsg, client};
 use ssh_client::{SshClient, connect_ssh, open_exec_channel};
-use std::{net::Ipv4Addr, path::Path, str::from_utf8, time::Duration};
+use std::{net::Ipv4Addr, path::{Path, PathBuf}, str::from_utf8, time::Duration};
 use tokio::time::timeout;
 
 const GET_SETTINGS_CMD: &str = "cat ~/.claude/settings.json 2>/dev/null || echo '{}'";
@@ -11,6 +12,46 @@ const GET_CLAUDE_JSON_CMD: &str = "cat ~/.claude.json 2>/dev/null || echo '{}'";
 const SET_CLAUDE_JSON_CMD: &str = "cat > ~/.claude.json";
 const CHANNEL_SEND_TIMEOUT_SECS: u64 = 30;
 const CHANNEL_WAIT_TIMEOUT_SECS: u64 = 30;
+
+/// Abstraction over VM config file operations (read/write ~/.claude.json and ~/.claude/settings.json).
+#[async_trait]
+pub trait VmConfigOps: Send + Sync {
+    async fn get_claude_json_raw(&self, guest_ip: Ipv4Addr) -> Result<String>;
+    async fn set_claude_json(&self, guest_ip: Ipv4Addr, content: &str) -> Result<()>;
+    async fn get_settings(&self, guest_ip: Ipv4Addr) -> Result<VmSettings>;
+    async fn get_settings_raw(&self, guest_ip: Ipv4Addr) -> Result<String>;
+    async fn set_settings(&self, guest_ip: Ipv4Addr, content: &str) -> Result<()>;
+}
+
+/// Production implementation that delegates to SSH free functions.
+pub struct SshVmConfigOps {
+    pub ssh_key_path: PathBuf,
+    pub ssh_user: String,
+    pub vm_host_key_path: PathBuf,
+}
+
+#[async_trait]
+impl VmConfigOps for SshVmConfigOps {
+    async fn get_claude_json_raw(&self, guest_ip: Ipv4Addr) -> Result<String> {
+        get_vm_claude_json_raw(guest_ip, &self.ssh_key_path, &self.ssh_user, &self.vm_host_key_path)
+            .await
+    }
+    async fn set_claude_json(&self, guest_ip: Ipv4Addr, content: &str) -> Result<()> {
+        set_vm_claude_json(guest_ip, &self.ssh_key_path, &self.ssh_user, &self.vm_host_key_path, content)
+            .await
+    }
+    async fn get_settings(&self, guest_ip: Ipv4Addr) -> Result<VmSettings> {
+        get_vm_settings(guest_ip, &self.ssh_key_path, &self.ssh_user, &self.vm_host_key_path).await
+    }
+    async fn get_settings_raw(&self, guest_ip: Ipv4Addr) -> Result<String> {
+        get_vm_settings_raw(guest_ip, &self.ssh_key_path, &self.ssh_user, &self.vm_host_key_path)
+            .await
+    }
+    async fn set_settings(&self, guest_ip: Ipv4Addr, content: &str) -> Result<()> {
+        set_vm_settings(guest_ip, &self.ssh_key_path, &self.ssh_user, &self.vm_host_key_path, content)
+            .await
+    }
+}
 
 pub struct VmSettings {
     pub has_api_key: bool,

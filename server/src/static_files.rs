@@ -11,6 +11,7 @@ use tokio_util::io::ReaderStream;
 
 use crate::state::{AppError, AppState};
 
+#[derive(Default)]
 pub(crate) struct StaticAssets {
     pub(crate) app_js_path: PathBuf,
     pub(crate) styles_css_path: PathBuf,

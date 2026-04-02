@@ -871,6 +871,7 @@ name = "chat-settings"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bytes",
  "russh",
  "serde_json",
@@ -4074,6 +4075,7 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "authorize",
  "axum",
  "base64",

@@ -18,6 +18,7 @@ use uuid::Uuid;
 use vm_lifecycle::{VmBuildConfig, VmRegistry};
 
 use crate::static_files::StaticAssets;
+use crate::http_client::HttpClient;
 
 #[derive(Clone, Deserialize)]
 pub(crate) struct AppConfig {
@@ -209,20 +210,31 @@ pub(crate) struct AppState {
     pub(crate) vms: VmRegistry,
     pub(crate) provisioning_users: Arc<Mutex<HashSet<Uuid>>>,
     pub(crate) static_assets: Arc<StaticAssets>,
+    pub(crate) vm_config_ops: Arc<dyn chat_settings::VmConfigOps>,
+    pub(crate) http_client: Arc<dyn HttpClient>,
 }
 
 impl AppState {
-    pub(crate) fn new(config: AppConfig, pg_pool: PgPool, static_assets: StaticAssets) -> Self {
+    pub(crate) fn new(
+        config: AppConfig,
+        pg_pool: PgPool,
+        static_assets: StaticAssets,
+        vm_config_ops: Arc<dyn chat_settings::VmConfigOps>,
+        http_client: Arc<dyn HttpClient>,
+    ) -> Self {
         AppState {
             config,
             db: pg_pool,
             vms: Arc::new(Mutex::new(HashMap::new())),
             provisioning_users: Arc::new(Mutex::new(HashSet::new())),
             static_assets: Arc::new(static_assets),
+            vm_config_ops,
+            http_client,
         }
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct AppError(pub(crate) anyhow::Error);
 
 impl IntoResponse for AppError {
