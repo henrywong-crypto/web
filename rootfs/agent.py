@@ -18,11 +18,6 @@ MCP_PROXY_PORT = 8443
 # Replaced by build_rootfs.py when --mcp-base-url is provided.
 MCP_SERVERS: dict = {}
 
-# Override the entrypoint so sessions created via the SDK are visible to the CLI's /resume.
-# The SDK normally sets CLAUDE_CODE_ENTRYPOINT=sdk-py, which makes sessions invisible to
-# the CLI. Setting it to "cli" before the SDK spawns Claude Code makes sessions appear
-# in both the CLI and web UI.
-os.environ["CLAUDE_CODE_ENTRYPOINT"] = "cli"
 
 
 def load_mcp_servers() -> dict:
@@ -396,6 +391,7 @@ async def _run_query_inner(
         setting_sources=["user"],
         can_use_tool=handle_tool_permission,
         mcp_servers=load_mcp_servers(),
+        env={"CLAUDE_CODE_ENTRYPOINT": "cli"},
         hooks={
             "PreToolUse": [
                 HookMatcher(
