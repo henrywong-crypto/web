@@ -547,6 +547,71 @@ function McpServersSection({
     }
   }, [formUrl, csrfFetch]);
 
+  // Auto-detect OAuth when URL changes (debounced via ref to avoid stale closures)
+  const detectTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleUrlChange = useCallback(
+    (newUrl: string) => {
+      setFormUrl(newUrl);
+      setOauthDetected(false);
+      setOauthMetadata(null);
+      setOauthClientId("");
+      setOauthClientSecret("");
+      setRegError(null);
+      if (detectTimerRef.current) clearTimeout(detectTimerRef.current);
+      if (!newUrl.trim()) return;
+      detectTimerRef.current = setTimeout(async () => {
+        // Inline detection to avoid stale closure issues with handleDetectAuth
+        setDetecting(true);
+        setSaveError(null);
+        try {
+          const res = await fetch(
+            `/api/mcp-servers/oauth-discover?url=${encodeURIComponent(newUrl.trim())}`,
+          );
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          if (data.oauth && data.metadata) {
+            setOauthDetected(true);
+            setOauthMetadata(data.metadata);
+            if (data.metadata.registration_endpoint) {
+              try {
+                const regRes = await csrfFetch("/api/mcp-servers/oauth-register", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    registration_endpoint: data.metadata.registration_endpoint,
+                    client_name: "Claude Web",
+                    redirect_uri: `${window.location.origin}/callback/mcp-oauth`,
+                    scope: data.metadata.scopes_supported?.join(" ") ?? undefined,
+                    token_endpoint_auth_methods_supported:
+                      data.metadata.token_endpoint_auth_methods_supported ?? undefined,
+                  }),
+                });
+                if (regRes.ok) {
+                  const regData = await regRes.json();
+                  setOauthClientId(regData.client_id);
+                  if (regData.client_secret) {
+                    setOauthClientSecret(regData.client_secret);
+                  }
+                } else {
+                  const errText = await regRes.text();
+                  setRegError(errText || `Registration failed: HTTP ${regRes.status}`);
+                }
+              } catch (regErr) {
+                setRegError(`Registration request failed: ${String(regErr)}`);
+              }
+            }
+          }
+        } catch (err) {
+          setSaveError(`Auth detection failed: ${String(err)}`);
+        } finally {
+          setDetecting(false);
+        }
+      }, 400);
+    },
+    [csrfFetch],
+  );
+
   const handleAutoRegister = useCallback(async () => {
     if (!oauthMetadata?.registration_endpoint) return;
     setRegistering(true);
@@ -770,16 +835,7 @@ function McpServersSection({
             <input
               type="text"
               value={formUrl}
-              onChange={(e) => {
-                setFormUrl(e.target.value);
-                setOauthDetected(false);
-                setOauthMetadata(null);
-              }}
-              onBlur={() => {
-                if (formUrl.trim() && !oauthDetected && !detecting) {
-                  handleDetectAuth();
-                }
-              }}
+              onChange={(e) => handleUrlChange(e.target.value)}
               placeholder="https://example.com/mcp"
               className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
             />

@@ -203,7 +203,7 @@ test.describe("mcp servers", () => {
     await expect(saveBtn).toBeEnabled();
   });
 
-  test("MCP-10 URL field auto-detects OAuth on blur", async ({
+  test("MCP-10 URL field auto-detects OAuth after typing", async ({
     page,
   }) => {
     await setupApp(page, {
@@ -221,11 +221,8 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com/v1");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
 
-    // Auto-detection should trigger and find OAuth
+    // Auto-detection should trigger after debounce and find OAuth
     await expect(page.getByText("OAuth required")).toBeVisible();
   });
 
@@ -248,9 +245,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.figma.com/v1");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
 
     await expect(page.getByText("OAuth required")).toBeVisible();
     await expect(
@@ -273,9 +268,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://simple.example.com/mcp");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
 
     // Should still show manual headers + Save
     await expect(
@@ -302,13 +295,8 @@ test.describe("mcp servers", () => {
     await page.getByText("MCP Servers").click();
     await page.getByText("Add Server").click();
 
-    // Blur empty URL field — should not trigger detection
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
-
-    // No OAuth detection should appear, manual headers form should still be visible
+    // URL is empty — wait a bit then verify no detection triggered
+    await page.waitForTimeout(600);
     await expect(page.getByText("Checking for OAuth")).not.toBeVisible();
     await expect(page.getByText("OAuth detected")).not.toBeVisible();
   });
@@ -329,9 +317,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://oauth.example.com/mcp");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
     await expect(page.getByText("OAuth required")).toBeVisible();
 
     // Change URL — OAuth state should reset
@@ -361,9 +347,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com/v1");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
 
     // Auto-registration should succeed and show "OAuth ready"
     await expect(page.getByText("OAuth ready")).toBeVisible();
@@ -397,9 +381,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com/v1");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
     await expect(page.getByText("OAuth ready")).toBeVisible();
 
     // Register interceptors AFTER setupApp so they have higher priority.
@@ -453,9 +435,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
 
     // Should detect OAuth and show the auth flow UI
     await expect(page.getByText("OAuth required")).toBeVisible();
@@ -485,9 +465,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.figma.com/mcp");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
     await expect(page.getByText("OAuth ready")).toBeVisible();
 
     const regBody = ctrl.lastMcpRegister();
@@ -515,9 +493,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.example.com");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
 
     // Should show OAuth required with error details
     await expect(page.getByText("Auto-registration failed")).toBeVisible();
@@ -546,9 +522,7 @@ test.describe("mcp servers", () => {
     await page
       .getByPlaceholder("https://example.com/mcp")
       .fill("https://mcp.figma.com/mcp");
-    // Trigger auto-detection by focusing URL field then pressing Tab to blur
-    await page.getByPlaceholder("https://example.com/mcp").focus();
-    await page.keyboard.press("Tab");
+    // Auto-detection triggers after URL change (debounced)
 
     await expect(page.getByText("OAuth ready")).toBeVisible();
     await expect(
