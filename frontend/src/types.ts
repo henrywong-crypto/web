@@ -200,7 +200,6 @@ export type StreamPhase =
 export interface StreamPhaseInfo {
   phase: StreamPhase;
   toolName?: string;
-  startedAt?: number;
 }
 
 export type ViewTab = "chat" | "terminal";

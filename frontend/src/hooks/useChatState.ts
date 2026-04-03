@@ -60,6 +60,8 @@ export interface ChatStateResult {
   isWorktreeActive: (conversationId: string | null) => boolean;
   getWorktreeName: (conversationId: string | null) => string;
   setWorktreeActive: (conversationId: string | null, active: boolean, name: string) => void;
+  getStreamStartTime: (conversationId: string | null) => number | undefined;
+  setStreamStartTime: (conversationId: string | null, time: number) => void;
 }
 
 export function useChatState(): ChatStateResult {
@@ -76,6 +78,7 @@ export function useChatState(): ChatStateResult {
   const tokenUsageByConversation = useRef<Map<string, TokenUsage>>(new Map());
   const planActiveByConversation = useRef<Map<string, boolean>>(new Map());
   const worktreeByConversation = useRef<Map<string, { active: boolean; name: string }>>(new Map());
+  const streamStartTimeByConversation = useRef<Map<string, number>>(new Map());
   const [viewConversationId, setViewConversationId] = useState<string | null>(
     null,
   );
@@ -427,5 +430,19 @@ export function useChatState(): ChatStateResult {
     isWorktreeActive,
     getWorktreeName,
     setWorktreeActive,
+    getStreamStartTime: useCallback(
+      (conversationId: string | null): number | undefined => {
+        if (!conversationId) return undefined;
+        return streamStartTimeByConversation.current.get(conversationId);
+      },
+      [],
+    ),
+    setStreamStartTime: useCallback(
+      (conversationId: string | null, time: number) => {
+        if (!conversationId) return;
+        streamStartTimeByConversation.current.set(conversationId, time);
+      },
+      [],
+    ),
   };
 }

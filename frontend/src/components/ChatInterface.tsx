@@ -385,6 +385,7 @@ export default function ChatInterface({
   const isCurrentRunning =
     viewConversationId !== null && isConversationRunning(viewConversationId);
   const streamPhase = chatState.getStreamPhase(viewConversationId);
+  const streamStartTime = chatState.getStreamStartTime?.(viewConversationId);
   const messageQueue = getQueue(viewConversationId);
   const worktreeActive = chatState.isWorktreeActive(viewConversationId);
   const worktreeName = chatState.getWorktreeName(viewConversationId);
@@ -563,6 +564,7 @@ export default function ChatInterface({
           key={viewConversationId ?? "none"}
           isLoading={isCurrentRunning}
           streamPhase={streamPhase}
+          startTime={streamStartTime}
           onAbort={handleStop}
         />
       </div>

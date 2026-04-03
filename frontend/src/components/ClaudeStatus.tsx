@@ -26,15 +26,17 @@ function phaseLabel(info: StreamPhaseInfo): string {
 interface ClaudeStatusProps {
   isLoading: boolean;
   streamPhase: StreamPhaseInfo;
+  startTime?: number;
   onAbort?: () => void;
 }
 
 export default function ClaudeStatus({
   isLoading,
   streamPhase,
+  startTime,
   onAbort,
 }: ClaudeStatusProps) {
-  // Tick counter just to force re-render every second
+  // Tick to force re-render every second
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -45,9 +47,8 @@ export default function ClaudeStatus({
 
   if (!isLoading) return null;
 
-  // Compute elapsed from the per-conversation startedAt timestamp
-  const startedAt = streamPhase.startedAt ?? Date.now();
-  const elapsedTime = Math.floor((Date.now() - startedAt) / 1000);
+  // Compute elapsed from the per-conversation start time (stored in ref, survives switches)
+  const elapsedTime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
   const statusText = phaseLabel(streamPhase);
   const elapsedLabel = elapsedTime > 0 ? formatElapsedTime(elapsedTime) : "";
 

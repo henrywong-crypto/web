@@ -279,7 +279,8 @@ export function useSseHandlers(
           const id = generateId();
           ss.thinkingMsgId = id;
           ss.assistantMsgId = null;
-          setStreamPhase(session, { phase: "processing", startedAt: Date.now() });
+          setStreamPhase(session, { phase: "processing" });
+          chatState.setStreamStartTime?.(session, Date.now());
           addMessage(session, {
             id,
             type: "assistant",
