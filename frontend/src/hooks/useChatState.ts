@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import type { ChatMessage, PendingQuestion, StreamPhaseInfo } from "../types";
+import type { ChatMessage, PendingQuestion, StreamPhaseInfo, AgentTask, TokenUsage } from "../types";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -50,6 +50,16 @@ export interface ChatStateResult {
   generateId: () => string;
   renderTick: number;
   bumpRender: () => void;
+  // Agent feature state
+  getTasksForConversation: (conversationId: string | null) => AgentTask[];
+  upsertTask: (conversationId: string | null, task: Partial<AgentTask> & { id: string }) => void;
+  getTokenUsage: (conversationId: string | null) => TokenUsage;
+  setTokenUsage: (conversationId: string | null, usage: TokenUsage) => void;
+  isPlanActive: (conversationId: string | null) => boolean;
+  setPlanActive: (conversationId: string | null, active: boolean) => void;
+  isWorktreeActive: (conversationId: string | null) => boolean;
+  getWorktreeName: (conversationId: string | null) => string;
+  setWorktreeActive: (conversationId: string | null, active: boolean, name: string) => void;
 }
 
 export function useChatState(): ChatStateResult {
@@ -61,6 +71,11 @@ export function useChatState(): ChatStateResult {
   const streamPhaseBySession = useRef<Map<string, StreamPhaseInfo>>(new Map());
   const queueBySession = useRef<Map<string, string[]>>(new Map());
   const lastActivityByConversation = useRef<Map<string, number>>(new Map());
+  // Agent feature state refs
+  const tasksByConversation = useRef<Map<string, Map<string, AgentTask>>>(new Map());
+  const tokenUsageByConversation = useRef<Map<string, TokenUsage>>(new Map());
+  const planActiveByConversation = useRef<Map<string, boolean>>(new Map());
+  const worktreeByConversation = useRef<Map<string, { active: boolean; name: string }>>(new Map());
   const [viewConversationId, setViewConversationId] = useState<string | null>(
     null,
   );
@@ -282,6 +297,97 @@ export function useChatState(): ChatStateResult {
     [],
   );
 
+  // Agent feature callbacks
+  const getTasksForConversation = useCallback(
+    (conversationId: string | null): AgentTask[] => {
+      if (!conversationId) return [];
+      const map = tasksByConversation.current.get(conversationId);
+      return map ? Array.from(map.values()) : [];
+    },
+    [],
+  );
+
+  const upsertTask = useCallback(
+    (conversationId: string | null, task: Partial<AgentTask> & { id: string }) => {
+      if (!conversationId) return;
+      let map = tasksByConversation.current.get(conversationId);
+      if (!map) {
+        map = new Map();
+        tasksByConversation.current.set(conversationId, map);
+      }
+      const existing = map.get(task.id);
+      map.set(task.id, {
+        id: task.id,
+        subject: task.subject || existing?.subject || "",
+        description: task.description ?? existing?.description,
+        status: task.status ?? existing?.status ?? "pending",
+        activeForm: task.activeForm ?? existing?.activeForm,
+        blockedBy: task.blockedBy ?? existing?.blockedBy,
+      });
+      setRenderTick((t) => t + 1);
+    },
+    [],
+  );
+
+  const getTokenUsage = useCallback(
+    (conversationId: string | null): TokenUsage => {
+      if (!conversationId) return { estimatedTokens: 0, contextWindow: 200_000 };
+      return tokenUsageByConversation.current.get(conversationId) ?? { estimatedTokens: 0, contextWindow: 200_000 };
+    },
+    [],
+  );
+
+  const setTokenUsage = useCallback(
+    (conversationId: string | null, usage: TokenUsage) => {
+      if (!conversationId) return;
+      tokenUsageByConversation.current.set(conversationId, usage);
+      // Don't bump render tick for every token — too frequent
+    },
+    [],
+  );
+
+  const isPlanActive = useCallback(
+    (conversationId: string | null): boolean => {
+      if (!conversationId) return false;
+      return planActiveByConversation.current.get(conversationId) ?? false;
+    },
+    [],
+  );
+
+  const setPlanActive = useCallback(
+    (conversationId: string | null, active: boolean) => {
+      if (!conversationId) return;
+      planActiveByConversation.current.set(conversationId, active);
+      setRenderTick((t) => t + 1);
+    },
+    [],
+  );
+
+  const isWorktreeActive = useCallback(
+    (conversationId: string | null): boolean => {
+      if (!conversationId) return false;
+      return worktreeByConversation.current.get(conversationId)?.active ?? false;
+    },
+    [],
+  );
+
+  const getWorktreeName = useCallback(
+    (conversationId: string | null): string => {
+      if (!conversationId) return "";
+      return worktreeByConversation.current.get(conversationId)?.name ?? "";
+    },
+    [],
+  );
+
+  const setWorktreeActive = useCallback(
+    (conversationId: string | null, active: boolean, name: string) => {
+      if (!conversationId) return;
+      worktreeByConversation.current.set(conversationId, { active, name });
+      setRenderTick((t) => t + 1);
+    },
+    [],
+  );
+
   return {
     messagesBySession,
     viewConversationId,
@@ -312,5 +418,14 @@ export function useChatState(): ChatStateResult {
     generateId,
     renderTick,
     bumpRender,
+    getTasksForConversation,
+    upsertTask,
+    getTokenUsage,
+    setTokenUsage,
+    isPlanActive,
+    setPlanActive,
+    isWorktreeActive,
+    getWorktreeName,
+    setWorktreeActive,
   };
 }

@@ -8,6 +8,8 @@ import type {
   StoredQuestion,
   ToolMessage,
   TranscriptMessage,
+  AgentTask,
+  TokenUsage,
 } from "../types";
 import type { ChatStateResult } from "./useChatState";
 import { buildMessagesFromTranscript } from "../utils/transcript";
@@ -129,6 +131,8 @@ interface StreamState {
   thinkingMsgId: string | null;
   assistantMsgId: string | null;
   toolIdToMsgId: Map<string, string>;
+  toolIdToName: Map<string, string>;
+  estimatedTokens: number;
 }
 
 function getOrCreateStreamState(
@@ -142,6 +146,8 @@ function getOrCreateStreamState(
       thinkingMsgId: null,
       assistantMsgId: null,
       toolIdToMsgId: new Map(),
+      toolIdToName: new Map(),
+      estimatedTokens: 0,
     };
     map.set(conversationId, state);
   }
@@ -318,6 +324,12 @@ export function useSseHandlers(
           const { text } = event.payload;
           sealThinking();
           setStreamPhase(session, { phase: "responding" });
+          // Track token estimate
+          ss.estimatedTokens += Math.ceil(text.length / 4);
+          chatState.setTokenUsage?.(session, {
+            estimatedTokens: ss.estimatedTokens,
+            contextWindow: 200_000,
+          });
           if (!ss.assistantMsgId) {
             const id = generateId();
             ss.assistantMsgId = id;
@@ -349,7 +361,22 @@ export function useSseHandlers(
           const { id: toolId, name, input } = event.payload;
           sealThinking();
           ss.assistantMsgId = null;
+          ss.toolIdToName.set(toolId, name);
           setStreamPhase(session, { phase: "tool_use", toolName: name });
+
+          // Intercept plan mode tools
+          if (name === "EnterPlanMode") {
+            chatState.setPlanActive?.(session, true);
+          }
+          if (name === "ExitPlanMode") {
+            chatState.setPlanActive?.(session, false);
+          }
+
+          // Intercept worktree tools
+          if (name === "EnterWorktree") {
+            chatState.setWorktreeActive?.(session, true, String(input?.name ?? ""));
+          }
+
           if (name === "AskUserQuestion") break;
           const msgId = generateId();
           ss.toolIdToMsgId.set(toolId, msgId);
@@ -378,6 +405,50 @@ export function useSseHandlers(
           if (!session || !ss) break;
           const { tool_use_id, content, is_error } = event.payload;
           setStreamPhase(session, { phase: "thinking" });
+
+          // Track tokens from tool results
+          ss.estimatedTokens += Math.ceil(content.length / 4);
+          chatState.setTokenUsage?.(session, {
+            estimatedTokens: ss.estimatedTokens,
+            contextWindow: 200_000,
+          });
+
+          // Intercept task tool results
+          const toolName = ss.toolIdToName.get(tool_use_id);
+          if (toolName === "TaskCreate" || toolName === "TaskUpdate" || toolName === "TaskList" || toolName === "TaskGet") {
+            try {
+              const parsed = JSON.parse(content);
+              if (toolName === "TaskCreate" && parsed.task) {
+                chatState.upsertTask?.(session, {
+                  id: parsed.task.id,
+                  subject: parsed.task.subject,
+                  description: "",
+                  status: "pending",
+                });
+              } else if (toolName === "TaskUpdate" && parsed.taskId) {
+                chatState.upsertTask?.(session, {
+                  id: parsed.taskId,
+                  subject: "",
+                  status: parsed.statusChange?.to ?? "pending",
+                });
+              } else if ((toolName === "TaskList" || toolName === "TaskGet") && parsed.tasks) {
+                for (const t of parsed.tasks) {
+                  chatState.upsertTask?.(session, {
+                    id: t.id,
+                    subject: t.subject,
+                    status: t.status,
+                    blockedBy: t.blockedBy,
+                  });
+                }
+              }
+            } catch { /* ignore parse errors */ }
+          }
+
+          // Intercept worktree exit
+          if (toolName === "ExitWorktree") {
+            chatState.setWorktreeActive?.(session, false, "");
+          }
+
           const msgId = ss.toolIdToMsgId.get(tool_use_id);
           if (msgId) {
             updateMessageById(session, msgId, (m) => {
@@ -469,6 +540,7 @@ export function useSseHandlers(
           }
           doneState.assistantMsgId = null;
           doneState.toolIdToMsgId.clear();
+          doneState.toolIdToName.clear();
           streamStateRef.current.delete(conversation_id);
 
           const storedQuestion = getQuestionsForConversation(conversation_id);

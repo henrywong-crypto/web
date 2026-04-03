@@ -3,6 +3,7 @@ import { Check, ExternalLink, Plus, Trash2, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
 import type { UiPreferences } from "../hooks/useUiPreferences";
 import type { McpServer } from "../types";
+import SkillsPanel from "./SkillsPanel";
 
 interface SettingsData {
   uses_bedrock: boolean;
@@ -20,7 +21,7 @@ interface SettingsPanelProps {
   ) => void;
 }
 
-type Tab = "general" | "preferences" | "mcp";
+type Tab = "general" | "preferences" | "mcp" | "skills";
 
 export default function SettingsPanel({
   onClose,
@@ -125,6 +126,7 @@ export default function SettingsPanel({
     { id: "general", label: "General" },
     { id: "preferences", label: "Preferences" },
     { id: "mcp", label: "MCP Servers" },
+    { id: "skills", label: "Skills" },
   ];
 
   return (
@@ -244,6 +246,7 @@ export default function SettingsPanel({
             </div>
           )}
           {activeTab === "mcp" && <McpServersSection csrfFetch={csrfFetch} />}
+          {activeTab === "skills" && <SkillsPanel csrfFetch={csrfFetch} />}
         </div>
       </div>
     </div>

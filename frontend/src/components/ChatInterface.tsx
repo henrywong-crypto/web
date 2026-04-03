@@ -10,7 +10,10 @@ import AskUserQuestionPanel from "./AskUserQuestionPanel";
 import ChatComposer from "./ChatComposer";
 import ChatMessagesPane from "./ChatMessagesPane";
 import ClaudeStatus from "./ClaudeStatus";
+import PlanApprovalCard from "./PlanApprovalCard";
 import QueueDrawer from "./QueueDrawer";
+import TokenIndicator from "./TokenIndicator";
+import WorktreeBadge from "./WorktreeBadge";
 
 interface ChatInterfaceProps {
   selectedConversation: Conversation | null;
@@ -383,6 +386,10 @@ export default function ChatInterface({
     viewConversationId !== null && isConversationRunning(viewConversationId);
   const streamPhase = chatState.getStreamPhase(viewConversationId);
   const messageQueue = getQueue(viewConversationId);
+  const tokenUsage = chatState.getTokenUsage(viewConversationId);
+  const worktreeActive = chatState.isWorktreeActive(viewConversationId);
+  const worktreeName = chatState.getWorktreeName(viewConversationId);
+  const planActive = chatState.isPlanActive(viewConversationId);
 
   // Drain queued messages when any conversation stops running.
   // Compares the current runningConversationIds with the previous snapshot
@@ -528,6 +535,18 @@ export default function ChatInterface({
           </p>
         </div>
       )}
+      {/* Status badges */}
+      {(worktreeActive || tokenUsage.estimatedTokens > 1000) && (
+        <div className="flex items-center gap-2 border-b border-border/50 px-4 py-1.5">
+          {worktreeActive && <WorktreeBadge name={worktreeName} />}
+          <div className="flex-1" />
+          <TokenIndicator
+            estimatedTokens={tokenUsage.estimatedTokens}
+            contextWindow={tokenUsage.contextWindow}
+            onCompact={() => handleSend("/compact")}
+          />
+        </div>
+      )}
       <ChatMessagesPane
         key={viewConversationId ?? "empty"}
         messages={messages}
@@ -547,11 +566,21 @@ export default function ChatInterface({
       {pendingQuestion ? (
         <div className="flex-shrink-0 border-t border-border p-4">
           <div className="mx-auto max-w-3xl">
-            <AskUserQuestionPanel
-              pendingQuestion={pendingQuestion}
-              onSubmit={handleAnswerQuestion}
-              onSkip={handleSkipQuestion}
-            />
+            {planActive ? (
+              <PlanApprovalCard>
+                <AskUserQuestionPanel
+                  pendingQuestion={pendingQuestion}
+                  onSubmit={handleAnswerQuestion}
+                  onSkip={handleSkipQuestion}
+                />
+              </PlanApprovalCard>
+            ) : (
+              <AskUserQuestionPanel
+                pendingQuestion={pendingQuestion}
+                onSubmit={handleAnswerQuestion}
+                onSkip={handleSkipQuestion}
+              />
+            )}
           </div>
         </div>
       ) : (

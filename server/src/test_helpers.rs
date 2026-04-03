@@ -57,6 +57,12 @@ impl VmConfigOps for MockVmConfigOps {
         *self.settings_json.lock().unwrap() = content.to_string();
         Ok(())
     }
+    async fn exec_command(&self, _guest_ip: Ipv4Addr, _cmd: &str) -> Result<String> {
+        Ok(String::new())
+    }
+    async fn write_file(&self, _guest_ip: Ipv4Addr, _cmd: &str, _content: &str) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Mock HTTP client that returns pre-configured responses in FIFO order.

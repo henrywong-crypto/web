@@ -197,3 +197,19 @@ export interface StreamPhaseInfo {
 }
 
 export type ViewTab = "chat" | "terminal";
+
+// Agent task tracking (intercepted from TaskCreate/TaskUpdate tool events)
+export interface AgentTask {
+  id: string;
+  subject: string;
+  description?: string;
+  status: "pending" | "in_progress" | "completed";
+  activeForm?: string;
+  blockedBy?: string[];
+}
+
+// Token usage estimation
+export interface TokenUsage {
+  estimatedTokens: number;
+  contextWindow: number;
+}

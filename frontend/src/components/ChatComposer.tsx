@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip, Send, Square, X } from "lucide-react";
 import { useSse } from "../contexts/SseContext";
+import CommandPalette from "./CommandPalette";
 import ModelChip from "./ModelChip";
 
 interface ChatComposerProps {
@@ -25,6 +26,8 @@ export default function ChatComposer({
   const [input, setInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [showCommands, setShowCommands] = useState(false);
+  const [commandFilter, setCommandFilter] = useState("");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -166,7 +169,29 @@ export default function ChatComposer({
     const target = e.target as HTMLTextAreaElement;
     target.style.height = "auto";
     target.style.height = Math.min(target.scrollHeight, 260) + "px";
-    setInput(target.value);
+    const val = target.value;
+    setInput(val);
+    if (val.startsWith("/") && !val.includes(" ") && !val.includes("\n")) {
+      setShowCommands(true);
+      setCommandFilter(val.slice(1));
+    } else {
+      setShowCommands(false);
+    }
+  }, []);
+
+  const handleCommandSelect = useCallback(
+    (command: string) => {
+      setShowCommands(false);
+      setInput("");
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      textareaRef.current?.focus();
+      onSend(command);
+    },
+    [onSend],
+  );
+
+  const handleCommandClose = useCallback(() => {
+    setShowCommands(false);
   }, []);
 
   return (
@@ -207,6 +232,15 @@ export default function ChatComposer({
                 );
               })}
             </div>
+          )}
+
+          {/* Command palette */}
+          {showCommands && (
+            <CommandPalette
+              filter={commandFilter}
+              onSelect={handleCommandSelect}
+              onClose={handleCommandClose}
+            />
           )}
 
           {/* Input row */}

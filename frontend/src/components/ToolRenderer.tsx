@@ -1,6 +1,7 @@
 import React from "react";
 import { ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import type { ToolResult } from "../types";
+import SubAgentCard from "./SubAgentCard";
 import ToolDiffViewer from "./ToolDiffViewer";
 
 interface ToolRendererProps {
@@ -16,6 +17,13 @@ export default function ToolRenderer({
   toolResult,
   autoExpandTools,
 }: ToolRendererProps) {
+  // Render sub-agent card for Agent tool
+  if (toolName === "Agent") {
+    return (
+      <SubAgentCard toolInput={toolInput} toolResult={toolResult} />
+    );
+  }
+
   return (
     <div className="my-0.5 overflow-hidden rounded-xl border border-border/60 bg-card shadow-md shadow-black/5 ring-1 ring-border/10">
       <ToolHeader
@@ -332,6 +340,10 @@ function buildSummary(
   if (toolName === "WebSearch") {
     const query = input.query;
     if (typeof query === "string") return query.slice(0, 80);
+  }
+  if (toolName === "Agent") {
+    const desc = input.description;
+    if (typeof desc === "string") return desc.slice(0, 80);
   }
   return "";
 }
