@@ -99,11 +99,17 @@ export interface ErrorMessage extends BaseMessage {
   content: string;
 }
 
+export interface CompactMessage extends BaseMessage {
+  type: "compact";
+  content: string;
+}
+
 export type ChatMessage =
   | UserMessage
   | AssistantMessage
   | ToolMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | CompactMessage;
 
 // SSE event payloads
 export interface SseTextDelta {

@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Copy,
   ListTodo,
   Loader2,
   Plus,
@@ -324,6 +325,9 @@ function ToolHeader({
             </span>
           )}
         </span>
+        {!toolResult && (toolName === "Bash" || toolName === "shell") && (
+          <BashRunningTimer />
+        )}
         {open ? (
           <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground/40" />
         ) : (
@@ -481,12 +485,35 @@ function TodoInputBody({ toolInput }: { toolInput: Record<string, unknown> }) {
 
 function ToolResultView({ result }: { result: ToolResult }) {
   const [open, setOpen] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
   const isLong = result.content.length > 200;
+  const lineCount = result.content.split("\n").length;
+
+  const handleCopy = React.useCallback(() => {
+    navigator.clipboard.writeText(result.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [result.content]);
 
   return (
     <div
-      className={`border-t border-border/60 px-3 py-2.5 ${result.isError ? "bg-destructive/5" : "bg-muted/15"}`}
+      className={`relative border-t border-border/60 px-3 py-2.5 ${result.isError ? "bg-destructive/5" : "bg-muted/15"}`}
     >
+      {/* Copy button */}
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="absolute right-2 top-2 rounded-md p-1 text-muted-foreground/40 transition-colors hover:bg-accent hover:text-foreground"
+        title="Copy"
+      >
+        {copied ? (
+          <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+        ) : (
+          <Copy className="h-3 w-3" />
+        )}
+      </button>
+
       {result.isError && (
         <div className="mb-1 text-xs font-semibold uppercase tracking-widest text-destructive">
           Error
@@ -501,7 +528,7 @@ function ToolResultView({ result }: { result: ToolResult }) {
               } ${!open ? "max-h-24" : ""}`}
               style={{ overflow: open ? "auto" : "hidden" }}
             >
-              {result.content}
+              {linkifyContent(result.content)}
             </pre>
             {!open && (
               <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-card to-transparent" />
@@ -512,7 +539,7 @@ function ToolResultView({ result }: { result: ToolResult }) {
             onClick={() => setOpen((v) => !v)}
             className="mt-1 text-xs text-primary hover:underline"
           >
-            {open ? "Show less" : "Show more"}
+            {open ? "Show less" : `Show more (${lineCount} lines)`}
           </button>
         </div>
       ) : (
@@ -521,10 +548,58 @@ function ToolResultView({ result }: { result: ToolResult }) {
             result.isError ? "text-destructive" : "text-muted-foreground"
           }`}
         >
-          {result.content}
+          {linkifyContent(result.content)}
         </pre>
       )}
     </div>
+  );
+}
+
+// ── File path linkification ────────────────────────────────────────────────
+
+const FILE_PATH_RE = /(?:^|[\s(,])(\/(?:[\w._-]+\/)+[\w._-]+\.[\w]+)(?=[)\s,;.:!?]|$)/g;
+
+function linkifyContent(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  FILE_PATH_RE.lastIndex = 0;
+  while ((match = FILE_PATH_RE.exec(text)) !== null) {
+    const pathStart = match.index + (match[0].length - match[1].length);
+    if (pathStart > lastIndex) {
+      parts.push(text.slice(lastIndex, pathStart));
+    }
+    const filePath = match[1];
+    parts.push(
+      <a
+        key={pathStart}
+        href={`/download?path=${encodeURIComponent(filePath)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary/70 underline decoration-primary/30 hover:text-primary hover:decoration-primary/60"
+      >
+        {filePath}
+      </a>,
+    );
+    lastIndex = pathStart + filePath.length;
+  }
+  if (lastIndex === 0) return text;
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return <>{parts}</>;
+}
+
+function BashRunningTimer() {
+  const [elapsed, setElapsed] = React.useState(0);
+  React.useEffect(() => {
+    const start = Date.now();
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
+      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+      Running{elapsed > 0 ? `… ${elapsed}s` : "…"}
+    </span>
   );
 }
 

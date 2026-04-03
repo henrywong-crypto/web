@@ -23,6 +23,19 @@ export default function SubAgentCard({
   const isRunning = !toolResult;
   const isError = toolResult?.isError ?? false;
 
+  // Extract summary stats from result if available
+  const resultSummary = React.useMemo(() => {
+    if (!toolResult?.content || isError) return null;
+    const text = toolResult.content;
+    // Try to detect tool usage counts from result text
+    const toolMatch = text.match(/(\d+)\s+tool\s+use/i);
+    const lineMatch = text.match(/(\d+)\s+lines?\s+(?:changed|modified|written|added)/i);
+    return {
+      toolCount: toolMatch ? parseInt(toolMatch[1], 10) : null,
+      lineInfo: lineMatch ? lineMatch[0] : null,
+    };
+  }, [toolResult, isError]);
+
   return (
     <div className="my-0.5 overflow-hidden rounded-xl border border-primary/20 bg-primary/5 shadow-md shadow-primary/5">
       <div className="flex items-center gap-2.5 px-3 py-2.5">
@@ -51,6 +64,11 @@ export default function SubAgentCard({
         </div>
         {isRunning && (
           <span className="text-xs text-primary/60">Working...</span>
+        )}
+        {!isRunning && !isError && resultSummary?.toolCount && (
+          <span className="text-xs text-muted-foreground/50">
+            {resultSummary.toolCount} tool {resultSummary.toolCount === 1 ? "use" : "uses"}
+          </span>
         )}
       </div>
       {toolResult && (

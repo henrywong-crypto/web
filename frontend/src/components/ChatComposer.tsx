@@ -32,6 +32,25 @@ export default function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [imageUrls, setImageUrls] = useState<Map<string, string>>(new Map());
+  const [stashedDraft, setStashedDraft] = useState<string | null>(null);
+
+  // Stash draft when streaming starts, restore when it ends
+  const prevLoading = useRef(isLoading);
+  useEffect(() => {
+    if (isLoading && !prevLoading.current) {
+      // Streaming just started — save current input if non-empty
+      if (input.trim()) {
+        setStashedDraft(input);
+        setInput("");
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+      }
+    } else if (!isLoading && prevLoading.current && stashedDraft) {
+      // Streaming just ended — restore draft
+      setInput(stashedDraft);
+      setStashedDraft(null);
+    }
+    prevLoading.current = isLoading;
+  }, [isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clean up object URLs on unmount
   useEffect(() => {
@@ -308,6 +327,22 @@ export default function ChatComposer({
                   <Send className="h-3.5 w-3.5" />
                 </button>
               </div>
+            )}
+          </div>
+
+          {/* Hints */}
+          <div className="mt-1 flex items-center justify-between px-1">
+            <span className="text-[10px] text-muted-foreground/30">
+              {stashedDraft ? (
+                <span className="text-primary/50">Draft saved — will restore when done</span>
+              ) : (
+                <><kbd className="font-sans">Shift+↵</kbd> new line</>
+              )}
+            </span>
+            {isLoading && queuedCount === 0 && !stashedDraft && (
+              <span className="text-[10px] text-muted-foreground/30">
+                Messages will be queued until Claude finishes
+              </span>
             )}
           </div>
         </div>

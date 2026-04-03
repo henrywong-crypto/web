@@ -489,6 +489,7 @@ export default function ChatInterface({
 
   // Drag-and-drop for the entire message area
   const [dragging, setDragging] = useState(false);
+  const [dragInfo, setDragInfo] = useState<string>("");
   const [droppedFiles, setDroppedFiles] = useState<File[] | undefined>();
   const dragCounterRef = useRef(0);
 
@@ -496,7 +497,15 @@ export default function ChatInterface({
     e.preventDefault();
     e.stopPropagation();
     dragCounterRef.current++;
-    if (dragCounterRef.current === 1) setDragging(true);
+    if (dragCounterRef.current === 1) {
+      setDragging(true);
+      const count = e.dataTransfer.items?.length ?? 0;
+      if (count > 1) {
+        setDragInfo(`Drop ${count} files to attach`);
+      } else {
+        setDragInfo("Drop file to attach");
+      }
+    }
   }, []);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
@@ -531,7 +540,7 @@ export default function ChatInterface({
       {dragging && (
         <div className="pointer-events-none absolute inset-0 z-40 flex items-center justify-center rounded-lg border-2 border-dashed border-primary/50 bg-primary/5">
           <p className="text-sm font-medium text-primary">
-            Drop files to attach
+            {dragInfo}
           </p>
         </div>
       )}

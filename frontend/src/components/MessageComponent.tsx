@@ -76,6 +76,20 @@ const MessageComponent = memo(
       );
     }
 
+    if (message.type === "compact") {
+      return (
+        <div className="px-4 py-2">
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1 bg-border/50" />
+            <span className="text-xs text-muted-foreground/40">
+              Earlier messages summarized
+            </span>
+            <div className="h-px flex-1 bg-border/50" />
+          </div>
+        </div>
+      );
+    }
+
     if (message.type === "error") {
       return (
         <div className="px-4 py-0.5">
