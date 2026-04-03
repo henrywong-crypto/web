@@ -410,10 +410,10 @@ def ensure_claude_dir(rootfs: Path) -> None:
     claude_dir.mkdir(parents=True, exist_ok=True)
     # Install built-in skills so /commit, /review, etc. work via the SDK.
     skills_dest = claude_dir / "skills"
-    skills_dest.mkdir(parents=True, exist_ok=True)
     if SKILLS_DIR.is_dir():
-        for skill_file in SKILLS_DIR.glob("*.md"):
-            shutil.copy(str(skill_file), str(skills_dest / skill_file.name))
+        if skills_dest.exists():
+            shutil.rmtree(str(skills_dest))
+        shutil.copytree(str(SKILLS_DIR), str(skills_dest))
     run(["chown", "-R", "1000:1000", str(claude_dir)])
 
 
