@@ -82,6 +82,7 @@ export interface AssistantMessage extends BaseMessage {
   type: "assistant";
   content: string;
   isThinking?: boolean;
+  elapsedMs?: number;
 }
 
 export interface ToolMessage extends BaseMessage {
