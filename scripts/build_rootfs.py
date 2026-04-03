@@ -36,6 +36,7 @@ ROOTFS_DIR = Path(__file__).parent.parent / "rootfs"
 AGENT_PY = ROOTFS_DIR / "agent.py"
 AGENT_SERVICE = ROOTFS_DIR / "agent.service"
 CLAUDE_UPDATE_SERVICE = ROOTFS_DIR / "claude-update.service"
+SKILLS_DIR = ROOTFS_DIR / "skills"
 
 # Runs as root inside the chroot.
 CHROOT_ROOT_SCRIPT = """\
@@ -407,6 +408,12 @@ WantedBy=multi-user.target
 def ensure_claude_dir(rootfs: Path) -> None:
     claude_dir = rootfs / "home/ubuntu/.claude"
     claude_dir.mkdir(parents=True, exist_ok=True)
+    # Install built-in skills so /commit, /review, etc. work via the SDK.
+    skills_dest = claude_dir / "skills"
+    skills_dest.mkdir(parents=True, exist_ok=True)
+    if SKILLS_DIR.is_dir():
+        for skill_file in SKILLS_DIR.glob("*.md"):
+            shutil.copy(str(skill_file), str(skills_dest / skill_file.name))
     run(["chown", "-R", "1000:1000", str(claude_dir)])
 
 
