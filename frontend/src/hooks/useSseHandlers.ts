@@ -488,7 +488,6 @@ export function useSseHandlers(
                   status: (t.status as "pending" | "in_progress" | "completed") ?? "pending",
                   activeForm: t.activeForm ? String(t.activeForm) : undefined,
                 })));
-                }
               }
             }
           }
