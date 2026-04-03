@@ -28,6 +28,7 @@ interface ToolRendererProps {
   toolResult?: ToolResult;
   autoExpandTools?: boolean;
   elapsedMs?: number;
+  startedAt?: number;
 }
 
 export default function ToolRenderer({
@@ -36,6 +37,7 @@ export default function ToolRenderer({
   toolResult,
   autoExpandTools,
   elapsedMs,
+  startedAt,
 }: ToolRendererProps) {
   // Render sub-agent card for Agent tool
   if (toolName === "Agent") {
@@ -62,6 +64,7 @@ export default function ToolRenderer({
         toolResult={toolResult}
         autoExpandTools={autoExpandTools}
         elapsedMs={elapsedMs}
+        startedAt={startedAt}
       />
     </div>
   );
@@ -258,12 +261,14 @@ function ToolHeader({
   toolResult,
   autoExpandTools,
   elapsedMs,
+  startedAt,
 }: {
   toolName: string;
   toolInput: Record<string, unknown>;
   toolResult?: ToolResult;
   autoExpandTools?: boolean;
   elapsedMs?: number;
+  startedAt?: number;
 }) {
   const diffProps = isEditTool(toolName)
     ? getDiffProps(toolName, toolInput)
@@ -287,8 +292,8 @@ function ToolHeader({
             </span>
           )}
         </span>
-        {!toolResult && (toolName === "Bash" || toolName === "shell") && (
-          <BashRunningTimer />
+        {!toolResult && startedAt && (
+          <ToolRunningTimer startedAt={startedAt} />
         )}
         {toolResult && elapsedMs !== undefined && elapsedMs >= 1000 && (
           <span className="tabular-nums text-xs text-muted-foreground/35">
@@ -555,17 +560,17 @@ function linkifyContent(text: string): React.ReactNode {
   return <>{parts}</>;
 }
 
-function BashRunningTimer() {
-  const [elapsed, setElapsed] = React.useState(0);
+function ToolRunningTimer({ startedAt }: { startedAt: number }) {
+  const [, setTick] = React.useState(0);
   React.useEffect(() => {
-    const start = Date.now();
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
+  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
   return (
     <span className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
       <Loader2 className="h-2.5 w-2.5 animate-spin" />
-      Running{elapsed > 0 ? `… ${elapsed}s` : "…"}
+      {elapsed > 0 ? formatElapsed(elapsed * 1000) : "…"}
     </span>
   );
 }

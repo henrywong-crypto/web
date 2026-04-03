@@ -132,6 +132,7 @@ const MessageComponent = memo(
             toolResult={message.toolResult}
             autoExpandTools={autoExpandTools}
             elapsedMs={message.elapsedMs}
+            startedAt={message.startedAt}
           />
         </div>
       );
