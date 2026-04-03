@@ -34,25 +34,20 @@ export default function ClaudeStatus({
   streamPhase,
   onAbort,
 }: ClaudeStatusProps) {
-  const [elapsedTime, setElapsedTime] = useState(0);
+  // Tick counter just to force re-render every second
+  const [, setTick] = useState(0);
 
-  // Use startedAt from stream phase (persists across conversation switches)
-  // Fall back to local timer if not available
   useEffect(() => {
-    if (!isLoading) {
-      setElapsedTime(0);
-      return;
-    }
-    const startTime = streamPhase.startedAt ?? Date.now();
-    setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
-    const timer = window.setInterval(() => {
-      setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
-    }, 1000);
+    if (!isLoading) return;
+    const timer = window.setInterval(() => setTick((t) => t + 1), 1000);
     return () => window.clearInterval(timer);
-  }, [isLoading, streamPhase.startedAt]);
+  }, [isLoading]);
 
   if (!isLoading) return null;
 
+  // Compute elapsed from the per-conversation startedAt timestamp
+  const startedAt = streamPhase.startedAt ?? Date.now();
+  const elapsedTime = Math.floor((Date.now() - startedAt) / 1000);
   const statusText = phaseLabel(streamPhase);
   const elapsedLabel = elapsedTime > 0 ? formatElapsedTime(elapsedTime) : "";
 
