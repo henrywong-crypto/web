@@ -395,7 +395,6 @@ async def _run_query_inner(
         allowed_tools=["Skill"],
         can_use_tool=handle_tool_permission,
         mcp_servers=load_mcp_servers(),
-        env={"CLAUDE_CODE_ENTRYPOINT": "cli"},
         hooks={
             "PreToolUse": [
                 HookMatcher(
