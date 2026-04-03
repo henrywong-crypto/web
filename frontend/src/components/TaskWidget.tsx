@@ -7,7 +7,6 @@ interface TaskWidgetProps {
 }
 
 const MAX_VISIBLE = 5;
-const AUTO_HIDE_MS = 5000;
 
 const STATUS_ORDER: Record<string, number> = {
   in_progress: 0,
@@ -32,36 +31,27 @@ const STATUS_CONFIG = {
 } as const;
 
 export default function TaskWidget({ tasks }: TaskWidgetProps) {
-  const [collapsed, setCollapsed] = React.useState(false);
-  const [hidden, setHidden] = React.useState(false);
-  const hideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [userCollapsed, setUserCollapsed] = React.useState<boolean | null>(null);
 
   const inProgress = tasks.filter((t) => t.status === "in_progress").length;
   const pending = tasks.filter((t) => t.status === "pending").length;
   const completed = tasks.filter((t) => t.status === "completed").length;
   const allDone = tasks.length > 0 && inProgress === 0 && pending === 0;
 
-  // Auto-hide when all tasks complete, show again if new tasks arrive
+  // Auto-collapse when all done, auto-expand when work resumes.
+  // User's manual toggle overrides until the active/done state changes.
+  const collapsed = userCollapsed ?? allDone;
+
+  // Reset user override when allDone state changes
+  const prevAllDone = React.useRef(allDone);
   React.useEffect(() => {
-    if (hideTimerRef.current) {
-      clearTimeout(hideTimerRef.current);
-      hideTimerRef.current = null;
+    if (prevAllDone.current !== allDone) {
+      prevAllDone.current = allDone;
+      setUserCollapsed(null);
     }
+  }, [allDone]);
 
-    if (allDone) {
-      setCollapsed(true);
-      hideTimerRef.current = setTimeout(() => setHidden(true), AUTO_HIDE_MS);
-    } else if (tasks.length > 0) {
-      setHidden(false);
-      setCollapsed(false);
-    }
-
-    return () => {
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    };
-  }, [allDone, tasks.length]);
-
-  if (tasks.length === 0 || hidden) return null;
+  if (tasks.length === 0) return null;
 
   const sorted = [...tasks].sort(
     (a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9),
@@ -71,18 +61,11 @@ export default function TaskWidget({ tasks }: TaskWidgetProps) {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-2">
-      <div className="rounded-xl border border-border/60 bg-card/80 shadow-sm">
+      <div className={`rounded-xl border shadow-sm ${allDone ? "border-emerald-500/30 bg-emerald-500/5" : "border-border/60 bg-card/80"}`}>
         {/* Header */}
         <button
           type="button"
-          onClick={() => {
-            if (hidden) {
-              setHidden(false);
-              setCollapsed(false);
-            } else {
-              setCollapsed((v) => !v);
-            }
-          }}
+          onClick={() => setUserCollapsed(!collapsed)}
           className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-accent/30"
         >
           {collapsed ? (
