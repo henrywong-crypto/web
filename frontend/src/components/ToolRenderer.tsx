@@ -15,11 +15,19 @@ import type { ToolResult } from "../types";
 import SubAgentCard from "./SubAgentCard";
 import ToolDiffViewer from "./ToolDiffViewer";
 
+function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${s % 60}s`;
+}
+
 interface ToolRendererProps {
   toolName: string;
   toolInput: Record<string, unknown>;
   toolResult?: ToolResult;
   autoExpandTools?: boolean;
+  elapsedMs?: number;
 }
 
 export default function ToolRenderer({
@@ -27,6 +35,7 @@ export default function ToolRenderer({
   toolInput,
   toolResult,
   autoExpandTools,
+  elapsedMs,
 }: ToolRendererProps) {
   // Render sub-agent card for Agent tool
   if (toolName === "Agent") {
@@ -52,6 +61,7 @@ export default function ToolRenderer({
         toolInput={toolInput}
         toolResult={toolResult}
         autoExpandTools={autoExpandTools}
+        elapsedMs={elapsedMs}
       />
     </div>
   );
@@ -247,11 +257,13 @@ function ToolHeader({
   toolInput,
   toolResult,
   autoExpandTools,
+  elapsedMs,
 }: {
   toolName: string;
   toolInput: Record<string, unknown>;
   toolResult?: ToolResult;
   autoExpandTools?: boolean;
+  elapsedMs?: number;
 }) {
   const diffProps = isEditTool(toolName)
     ? getDiffProps(toolName, toolInput)
@@ -277,6 +289,11 @@ function ToolHeader({
         </span>
         {!toolResult && (toolName === "Bash" || toolName === "shell") && (
           <BashRunningTimer />
+        )}
+        {toolResult && elapsedMs !== undefined && elapsedMs >= 1000 && (
+          <span className="tabular-nums text-xs text-muted-foreground/35">
+            {formatElapsed(elapsedMs)}
+          </span>
         )}
         {open ? (
           <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground/40" />

@@ -115,7 +115,7 @@ test.describe("assistant response - status position", () => {
     // Verify it's outside the scroll container by checking it's a sibling of the composer area
     const statusBox = await status.boundingBox();
     const composer = page.locator(
-      'textarea[placeholder="Message Claude…"], textarea[placeholder^="Type to queue"]',
+      'textarea[placeholder="Message Claude…"]',
     );
     const composerBox = await composer.boundingBox();
 

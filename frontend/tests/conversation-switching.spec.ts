@@ -504,7 +504,7 @@ test.describe("conversation switching", () => {
     // During streaming, placeholder should indicate queuing
     await expect(page.locator("textarea")).toHaveAttribute(
       "placeholder",
-      "Type to queue a message…",
+      "Message Claude…",
     );
 
     // Switch to new chat — placeholder back to normal
@@ -521,7 +521,7 @@ test.describe("conversation switching", () => {
       .click();
     await expect(page.locator("textarea")).toHaveAttribute(
       "placeholder",
-      "Type to queue a message…",
+      "Message Claude…",
     );
 
     // Complete the stream

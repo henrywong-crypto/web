@@ -45,7 +45,7 @@ test.describe("audit fixes", () => {
     // The app should not crash — the composer should still be present
     await expect(
       page.locator(
-        'textarea[placeholder="Message Claude…"], textarea[placeholder^="Type to queue"]',
+        'textarea[placeholder="Message Claude…"]',
       ),
     ).toBeVisible();
   });

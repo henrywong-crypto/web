@@ -287,13 +287,7 @@ export default function ChatComposer({
               value={input}
               onInput={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder={
-                isLoading
-                  ? queuedCount > 0
-                    ? `Type to queue a message (${queuedCount} pending)…`
-                    : "Type to queue a message…"
-                  : "Message Claude…"
-              }
+              placeholder="Message Claude…"
               rows={1}
               className="max-h-[260px] min-h-[32px] flex-1 resize-none bg-transparent py-[5px] text-base leading-snug text-foreground placeholder-muted-foreground/40 focus:outline-none"
               style={{ height: "32px" }}
