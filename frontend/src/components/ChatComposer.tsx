@@ -10,7 +10,6 @@ interface ChatComposerProps {
   onStop: () => void;
   focusKey?: number;
   droppedFiles?: File[];
-  queuedCount?: number;
 }
 
 export default function ChatComposer({
@@ -19,9 +18,8 @@ export default function ChatComposer({
   onStop,
   focusKey,
   droppedFiles,
-  queuedCount = 0,
 }: ChatComposerProps) {
-  const { uploadAction, uploadDir, csrfFetch } = useSse();
+  const { uploadAction, csrfFetch } = useSse();
 
   const [input, setInput] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -165,7 +163,6 @@ export default function ChatComposer({
     pendingFiles,
     uploadAction,
     csrfFetch,
-    uploadDir,
     onSend,
   ]);
 

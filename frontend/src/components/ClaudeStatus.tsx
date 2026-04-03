@@ -30,14 +30,12 @@ interface ClaudeStatusProps {
   isLoading: boolean;
   streamPhase: StreamPhaseInfo;
   startTime?: number;
-  onAbort?: () => void;
 }
 
 export default function ClaudeStatus({
   isLoading,
   streamPhase,
   startTime,
-  onAbort,
 }: ClaudeStatusProps) {
   const [, setTick] = useState(0);
   const [doneInfo, setDoneInfo] = useState<{ elapsed: number } | null>(null);

@@ -109,11 +109,6 @@ const MessageComponent = memo(
           <details className="group rounded-xl border border-primary/12 bg-primary/4 px-3 py-2.5">
             <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground">
               Thinking
-              {message.elapsedMs !== undefined && message.elapsedMs >= 1000 && (
-                <span className="ml-1.5 tabular-nums font-normal text-muted-foreground/35">
-                  · {Math.floor(message.elapsedMs / 1000)}s
-                </span>
-              )}
             </summary>
             <div className="mt-2 whitespace-pre-wrap text-sm italic text-muted-foreground leading-relaxed">
               {message.content}
@@ -131,8 +126,6 @@ const MessageComponent = memo(
             toolInput={message.toolInput}
             toolResult={message.toolResult}
             autoExpandTools={autoExpandTools}
-            elapsedMs={message.elapsedMs}
-            startedAt={message.startedAt}
           />
         </div>
       );

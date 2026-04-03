@@ -15,20 +15,11 @@ import type { ToolResult } from "../types";
 import SubAgentCard from "./SubAgentCard";
 import ToolDiffViewer from "./ToolDiffViewer";
 
-function formatElapsed(ms: number): string {
-  const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  return `${m}m ${s % 60}s`;
-}
-
 interface ToolRendererProps {
   toolName: string;
   toolInput: Record<string, unknown>;
   toolResult?: ToolResult;
   autoExpandTools?: boolean;
-  elapsedMs?: number;
-  startedAt?: number;
 }
 
 export default function ToolRenderer({
@@ -36,8 +27,6 @@ export default function ToolRenderer({
   toolInput,
   toolResult,
   autoExpandTools,
-  elapsedMs,
-  startedAt,
 }: ToolRendererProps) {
   // Render sub-agent card for Agent tool
   if (toolName === "Agent") {
@@ -63,8 +52,6 @@ export default function ToolRenderer({
         toolInput={toolInput}
         toolResult={toolResult}
         autoExpandTools={autoExpandTools}
-        elapsedMs={elapsedMs}
-        startedAt={startedAt}
       />
     </div>
   );
@@ -260,15 +247,11 @@ function ToolHeader({
   toolInput,
   toolResult,
   autoExpandTools,
-  elapsedMs,
-  startedAt,
 }: {
   toolName: string;
   toolInput: Record<string, unknown>;
   toolResult?: ToolResult;
   autoExpandTools?: boolean;
-  elapsedMs?: number;
-  startedAt?: number;
 }) {
   const diffProps = isEditTool(toolName)
     ? getDiffProps(toolName, toolInput)
@@ -292,14 +275,6 @@ function ToolHeader({
             </span>
           )}
         </span>
-        {!toolResult && startedAt && (
-          <ToolRunningTimer startedAt={startedAt} />
-        )}
-        {toolResult && elapsedMs !== undefined && elapsedMs >= 1000 && (
-          <span className="tabular-nums text-xs text-muted-foreground/35">
-            {formatElapsed(elapsedMs)}
-          </span>
-        )}
         {open ? (
           <ChevronDown className="h-3 w-3 flex-shrink-0 text-muted-foreground/40" />
         ) : (
@@ -558,21 +533,6 @@ function linkifyContent(text: string): React.ReactNode {
   if (lastIndex === 0) return text;
   if (lastIndex < text.length) parts.push(text.slice(lastIndex));
   return <>{parts}</>;
-}
-
-function ToolRunningTimer({ startedAt }: { startedAt: number }) {
-  const [, setTick] = React.useState(0);
-  React.useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-  return (
-    <span className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
-      <Loader2 className="h-2.5 w-2.5 animate-spin" />
-      {elapsed > 0 ? formatElapsed(elapsed * 1000) : "…"}
-    </span>
-  );
 }
 
 function buildSummary(

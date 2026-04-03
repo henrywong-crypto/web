@@ -129,7 +129,6 @@ function createPersistScheduler(): PersistScheduler {
 interface StreamState {
   taskId: string | null;
   thinkingMsgId: string | null;
-  thinkingStartedAt: number | null;
   assistantMsgId: string | null;
   toolIdToMsgId: Map<string, string>;
   toolIdToName: Map<string, string>;
@@ -145,7 +144,6 @@ function getOrCreateStreamState(
     state = {
       taskId: null,
       thinkingMsgId: null,
-      thinkingStartedAt: null,
       assistantMsgId: null,
       toolIdToMsgId: new Map(),
       toolIdToName: new Map(),
@@ -243,18 +241,11 @@ export function useSseHandlers(
       const sealThinking = () => {
         if (!ss || !ss.thinkingMsgId) return;
         const msgId = ss.thinkingMsgId;
-        const startedAt = ss.thinkingStartedAt;
         ss.thinkingMsgId = null;
-        ss.thinkingStartedAt = null;
         const msgs = getMessages(session);
         const thinkMsg = msgs.find((m) => m.id === msgId);
         if (thinkMsg && !thinkMsg.content) {
           removeMessage(session, msgId);
-        } else if (thinkMsg && startedAt) {
-          updateMessageById(session, msgId, (m) => ({
-            ...m,
-            elapsedMs: Date.now() - startedAt,
-          }));
         }
       };
 
@@ -287,7 +278,6 @@ export function useSseHandlers(
           if (!session || !ss) break;
           const id = generateId();
           ss.thinkingMsgId = id;
-          ss.thinkingStartedAt = Date.now();
           ss.assistantMsgId = null;
           setStreamPhase(session, { phase: "processing" });
           chatState.setStreamStartTime?.(session, Date.now());
@@ -414,7 +404,6 @@ export function useSseHandlers(
             toolId,
             toolName: name,
             toolInput: input,
-            startedAt: Date.now(),
           });
           if (ss.taskId) {
             const taskId = ss.taskId;
@@ -501,11 +490,9 @@ export function useSseHandlers(
 
           const msgId = ss.toolIdToMsgId.get(tool_use_id);
           if (msgId) {
-            const now = Date.now();
             updateMessageById(session, msgId, (m) => {
               if (m.type !== "tool") return m;
-              const elapsedMs = m.startedAt ? now - m.startedAt : undefined;
-              return { ...m, toolResult: { content, isError: is_error }, elapsedMs };
+              return { ...m, toolResult: { content, isError: is_error } };
             });
             if (ss.taskId) {
               const taskId = ss.taskId;

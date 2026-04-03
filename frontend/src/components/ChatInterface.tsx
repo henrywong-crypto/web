@@ -566,7 +566,6 @@ export default function ChatInterface({
           isLoading={isCurrentRunning && !pendingQuestion}
           streamPhase={streamPhase}
           startTime={streamStartTime}
-          onAbort={handleStop}
         />
       </div>
       <TaskWidget tasks={tasks} />
@@ -603,7 +602,6 @@ export default function ChatInterface({
             onStop={handleStop}
             focusKey={composerFocusKey}
             droppedFiles={droppedFiles}
-            queuedCount={messageQueue.length}
           />
         </>
       )}

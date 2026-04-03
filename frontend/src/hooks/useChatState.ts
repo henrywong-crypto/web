@@ -62,8 +62,6 @@ export interface ChatStateResult {
   setWorktreeActive: (conversationId: string | null, active: boolean, name: string) => void;
   getStreamStartTime: (conversationId: string | null) => number | undefined;
   setStreamStartTime: (conversationId: string | null, time: number) => void;
-  getTurnElapsedMs: (conversationId: string | null) => number | undefined;
-  setTurnElapsedMs: (conversationId: string | null, ms: number) => void;
 }
 
 export function useChatState(): ChatStateResult {
@@ -81,7 +79,6 @@ export function useChatState(): ChatStateResult {
   const planActiveByConversation = useRef<Map<string, boolean>>(new Map());
   const worktreeByConversation = useRef<Map<string, { active: boolean; name: string }>>(new Map());
   const streamStartTimeByConversation = useRef<Map<string, number>>(new Map());
-  const turnElapsedByConversation = useRef<Map<string, number>>(new Map());
   const [viewConversationId, setViewConversationId] = useState<string | null>(
     null,
   );
@@ -444,21 +441,6 @@ export function useChatState(): ChatStateResult {
       (conversationId: string | null, time: number) => {
         if (!conversationId) return;
         streamStartTimeByConversation.current.set(conversationId, time);
-      },
-      [],
-    ),
-    getTurnElapsedMs: useCallback(
-      (conversationId: string | null): number | undefined => {
-        if (!conversationId) return undefined;
-        return turnElapsedByConversation.current.get(conversationId);
-      },
-      [],
-    ),
-    setTurnElapsedMs: useCallback(
-      (conversationId: string | null, ms: number) => {
-        if (!conversationId) return;
-        turnElapsedByConversation.current.set(conversationId, ms);
-        setRenderTick((t) => t + 1);
       },
       [],
     ),
