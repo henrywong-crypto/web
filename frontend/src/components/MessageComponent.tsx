@@ -15,8 +15,6 @@ interface MessageComponentProps {
   message: ChatMessage;
   prevMessage: ChatMessage | null;
   insideCard?: boolean;
-  showThinking?: boolean;
-  autoExpandTools?: boolean;
 }
 
 const MessageComponent = memo(
@@ -24,8 +22,6 @@ const MessageComponent = memo(
     message,
     prevMessage,
     insideCard,
-    showThinking,
-    autoExpandTools,
   }: MessageComponentProps) => {
     const isGrouped =
       prevMessage !== null &&
@@ -102,7 +98,6 @@ const MessageComponent = memo(
     }
 
     if (message.type === "assistant" && message.isThinking) {
-      if (showThinking === false) return null;
       if (!message.content) return null;
       return (
         <div className={insideCard ? "py-0.5" : "px-4 py-0.5"}>
@@ -130,7 +125,6 @@ const MessageComponent = memo(
             toolName={message.toolName}
             toolInput={message.toolInput}
             toolResult={message.toolResult}
-            autoExpandTools={autoExpandTools}
           />
         </div>
       );

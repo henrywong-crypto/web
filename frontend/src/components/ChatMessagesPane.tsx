@@ -15,9 +15,6 @@ import MessageSearch from "./MessageSearch";
 interface ChatMessagesPaneProps {
   messages: ChatMessage[];
   isLoading: boolean;
-  autoScrollToBottom?: boolean;
-  showThinking?: boolean;
-  autoExpandTools?: boolean;
 }
 
 /** A "turn group" is a sequence of assistant + tool messages between user messages. */
@@ -56,12 +53,8 @@ function groupIntoTurns(messages: ChatMessage[]): TurnGroup[] {
 
 const AssistantTurnCard = React.memo(function AssistantTurnCard({
   messages,
-  showThinking,
-  autoExpandTools,
 }: {
   messages: ChatMessage[];
-  showThinking?: boolean;
-  autoExpandTools?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
   const firstMsg = messages[0];
@@ -109,8 +102,6 @@ const AssistantTurnCard = React.memo(function AssistantTurnCard({
               message={msg}
               prevMessage={null}
               insideCard
-              showThinking={showThinking}
-              autoExpandTools={autoExpandTools}
             />
           </MessageErrorBoundary>
         ))}
@@ -122,9 +113,6 @@ const AssistantTurnCard = React.memo(function AssistantTurnCard({
 export default function ChatMessagesPane({
   messages,
   isLoading,
-  autoScrollToBottom,
-  showThinking,
-  autoExpandTools,
 }: ChatMessagesPaneProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const userScrolledRef = useRef(false);
@@ -209,7 +197,6 @@ export default function ChatMessagesPane({
   const turnGroups = useMemo(() => groupIntoTurns(messages), [messages]);
 
   useEffect(() => {
-    if (autoScrollToBottom === false) return;
     if (userScrolledRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
@@ -301,8 +288,6 @@ export default function ChatMessagesPane({
                   <div className={isHighlighted ? "ring-2 ring-yellow-500/30 rounded-xl" : ""}>
                     <AssistantTurnCard
                       messages={group.messages}
-                      showThinking={showThinking}
-                      autoExpandTools={autoExpandTools}
                     />
                   </div>
                 </div>
@@ -324,8 +309,6 @@ export default function ChatMessagesPane({
                     <MessageComponent
                       message={msg}
                       prevMessage={null}
-                      showThinking={showThinking}
-                      autoExpandTools={autoExpandTools}
                     />
                   </MessageErrorBoundary>
                 </div>

@@ -8,7 +8,6 @@ import type { TerminalHandle } from "./components/Terminal";
 import FileManager from "./components/FileManager";
 import MobileNav from "./components/MobileNav";
 import SettingsPanel from "./components/SettingsPanel";
-import { useUiPreferences } from "./hooks/useUiPreferences";
 import type { Conversation, ViewTab } from "./types";
 
 class ErrorBoundary extends React.Component<
@@ -63,7 +62,6 @@ function AppContent() {
   >(new Set());
   const [newChatKey, setNewChatKey] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
-  const { preferences, setPreference } = useUiPreferences();
   const [showFilesPanel, setShowFilesPanel] = useState(false);
   const terminalRef = useRef<TerminalHandle>(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
@@ -202,7 +200,6 @@ function AppContent() {
                 newChatKey={newChatKey}
                 onRunningConversationChange={setRunningConversationIds}
                 onConversationCreated={setSelectedConversation}
-                preferences={preferences}
               />
             )}
             <div
@@ -223,8 +220,6 @@ function AppContent() {
       {showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}
-          preferences={preferences}
-          onTogglePreference={setPreference}
         />
       )}
 
