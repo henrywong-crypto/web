@@ -334,6 +334,9 @@ async def _run_query_inner(
     from claude_agent_sdk import ClaudeAgentOptions, PermissionResultAllow, query
     from claude_agent_sdk.types import HookMatcher, StreamEvent
 
+    # Force entrypoint before SDK reads it — ensures CLI behavior for resume
+    os.environ["CLAUDE_CODE_ENTRYPOINT"] = "cli"
+
     log(
         f"query start  task_id={task_id!r}  resume={sdk_session_id!r}  content_len={len(content)}"
     )
