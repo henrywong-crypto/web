@@ -1,5 +1,16 @@
 import React from "react";
-import { ChevronDown, ChevronRight, Wrench } from "lucide-react";
+import {
+  Brain,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  ListTodo,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Wrench,
+} from "lucide-react";
 import type { ToolResult } from "../types";
 import SubAgentCard from "./SubAgentCard";
 import ToolDiffViewer from "./ToolDiffViewer";
@@ -22,6 +33,16 @@ export default function ToolRenderer({
     return (
       <SubAgentCard toolInput={toolInput} toolResult={toolResult} />
     );
+  }
+
+  // Render compact cards for task tools
+  if (isTaskTool(toolName)) {
+    return <TaskToolCard toolName={toolName} toolInput={toolInput} toolResult={toolResult} />;
+  }
+
+  // Render memory notification for Write/Edit to memory files
+  if (isMemoryFile(toolName, toolInput)) {
+    return <MemoryUpdateCard toolInput={toolInput} />;
   }
 
   return (
@@ -79,6 +100,170 @@ function getDiffProps(
   }
   return null;
 }
+
+// ── Task tool helpers ──────────────────────────────────────────────────────
+
+function isTaskTool(toolName: string): boolean {
+  return (
+    toolName === "TaskCreate" ||
+    toolName === "TaskUpdate" ||
+    toolName === "TaskList" ||
+    toolName === "TaskGet"
+  );
+}
+
+const TASK_STATUS_ICON: Record<string, { icon: typeof Circle; color: string; animate?: boolean }> = {
+  pending: { icon: Circle, color: "text-muted-foreground" },
+  in_progress: { icon: Loader2, color: "text-primary", animate: true },
+  completed: { icon: CheckCircle2, color: "text-emerald-500" },
+};
+
+function TaskStatusIcon({ status }: { status: string }) {
+  const config = TASK_STATUS_ICON[status] ?? TASK_STATUS_ICON.pending;
+  const Icon = config.icon;
+  return (
+    <Icon
+      className={`h-3.5 w-3.5 flex-shrink-0 ${config.color} ${config.animate ? "animate-spin" : ""}`}
+    />
+  );
+}
+
+function TaskToolCard({
+  toolName,
+  toolInput,
+  toolResult,
+}: {
+  toolName: string;
+  toolInput: Record<string, unknown>;
+  toolResult?: ToolResult;
+}) {
+  const parsed = React.useMemo(() => {
+    if (!toolResult?.content) return null;
+    try {
+      return JSON.parse(toolResult.content);
+    } catch {
+      return null;
+    }
+  }, [toolResult]);
+
+  if (toolResult?.isError) {
+    return (
+      <div className="my-0.5 rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <span className="font-medium">{toolName}</span>
+        <span className="ml-2 text-xs">{toolResult.content.slice(0, 120)}</span>
+      </div>
+    );
+  }
+
+  if (toolName === "TaskCreate") {
+    const task = parsed?.task;
+    const subject = task?.subject ?? String(toolInput.subject ?? "");
+    const id = task?.id ?? "";
+    return (
+      <div className="my-0.5 flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-sm">
+        <Plus className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
+        <span className="text-sm">
+          <span className="font-medium text-muted-foreground">Task</span>
+          {id && <span className="ml-1 font-mono text-xs text-foreground/50">#{id}</span>}
+          <span className="ml-1.5 text-foreground/80">{subject}</span>
+        </span>
+      </div>
+    );
+  }
+
+  if (toolName === "TaskUpdate") {
+    const taskId = parsed?.taskId ?? String(toolInput.taskId ?? "");
+    const newStatus = parsed?.statusChange?.to ?? String(toolInput.status ?? "");
+    const subject = parsed?.subject ?? String(toolInput.subject ?? "");
+    return (
+      <div className="my-0.5 flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-sm">
+        <RefreshCw className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+        <span className="text-sm">
+          <span className="font-medium text-muted-foreground">Task</span>
+          {taskId && <span className="ml-1 font-mono text-xs text-foreground/50">#{taskId}</span>}
+          {newStatus && (
+            <span className={`ml-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium ${
+              newStatus === "completed" ? "bg-emerald-500/10 text-emerald-500" :
+              newStatus === "in_progress" ? "bg-primary/10 text-primary" :
+              "bg-muted/60 text-muted-foreground"
+            }`}>
+              {newStatus.replace("_", " ")}
+            </span>
+          )}
+          {subject && <span className="ml-1.5 text-foreground/80">{subject}</span>}
+        </span>
+      </div>
+    );
+  }
+
+  // TaskList / TaskGet
+  const tasks: { id: string; subject: string; status: string; blockedBy?: string[] }[] =
+    parsed?.tasks ?? (parsed?.task ? [parsed.task] : []);
+
+  if (tasks.length === 0) {
+    return (
+      <div className="my-0.5 flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-sm">
+        <ListTodo className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">No tasks</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-0.5 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <ListTodo className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">
+          Tasks ({tasks.length})
+        </span>
+      </div>
+      <div className="border-t border-border/40 px-3 py-1.5">
+        {tasks.slice(0, 10).map((t) => (
+          <div key={t.id} className="flex items-center gap-2 py-1">
+            <TaskStatusIcon status={t.status} />
+            <span className="font-mono text-xs text-foreground/50">#{t.id}</span>
+            <span className="truncate text-sm text-foreground/80">{t.subject}</span>
+            {t.blockedBy && t.blockedBy.length > 0 && (
+              <span className="ml-auto text-xs text-amber-500">
+                blocked by {t.blockedBy.map((b) => `#${b}`).join(", ")}
+              </span>
+            )}
+          </div>
+        ))}
+        {tasks.length > 10 && (
+          <div className="py-1 text-xs text-muted-foreground/50">
+            +{tasks.length - 10} more
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Memory file helpers ────────────────────────────────────────────────────
+
+function isMemoryFile(toolName: string, toolInput: Record<string, unknown>): boolean {
+  if (toolName !== "Write" && toolName !== "Edit") return false;
+  const filePath = String(toolInput.file_path ?? "");
+  return filePath.includes("/memory/") || filePath.endsWith("MEMORY.md");
+}
+
+function MemoryUpdateCard({ toolInput }: { toolInput: Record<string, unknown> }) {
+  const filePath = String(toolInput.file_path ?? "");
+  // Show a short relative-ish path
+  const displayPath = filePath.replace(/^.*\/(\.claude\/)/, "$1").replace(/^.*\/memory\//, "memory/");
+  return (
+    <div className="my-0.5 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 shadow-sm">
+      <Brain className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+      <span className="text-sm text-foreground/80">
+        Memory updated in{" "}
+        <span className="font-mono text-xs text-primary">{displayPath}</span>
+      </span>
+    </div>
+  );
+}
+
+// ── Standard tool header ───────────────────────────────────────────────────
 
 function ToolHeader({
   toolName,
@@ -344,6 +529,16 @@ function buildSummary(
   if (toolName === "Agent") {
     const desc = input.description;
     if (typeof desc === "string") return desc.slice(0, 80);
+  }
+  if (toolName === "TaskCreate") {
+    const subject = input.subject;
+    if (typeof subject === "string") return subject.slice(0, 80);
+  }
+  if (toolName === "TaskUpdate") {
+    const id = input.taskId;
+    const status = input.status;
+    if (typeof id === "string" && typeof status === "string")
+      return `#${id} → ${status}`;
   }
   return "";
 }

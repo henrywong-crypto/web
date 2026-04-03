@@ -24,6 +24,7 @@ interface ChatInterfaceProps {
   preferences?: UiPreferences;
   showTasksPanel?: boolean;
   onTasksClose?: () => void;
+  onTasksPanelOpen?: () => void;
 }
 
 export default function ChatInterface({
@@ -34,6 +35,7 @@ export default function ChatInterface({
   preferences,
   showTasksPanel = false,
   onTasksClose,
+  onTasksPanelOpen,
 }: ChatInterfaceProps) {
   const sseCtx = useSse();
   const {
@@ -46,6 +48,9 @@ export default function ChatInterface({
     getQuestionsForConversation,
   } = sseCtx;
   const chatState = useChatState();
+
+  // Auto-open task panel when TaskCreate fires
+  chatState.onTaskCreated = onTasksPanelOpen;
 
   const [composerFocusKey, setComposerFocusKey] = useState(0);
 

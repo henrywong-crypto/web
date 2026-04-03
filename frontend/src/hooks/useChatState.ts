@@ -60,6 +60,7 @@ export interface ChatStateResult {
   isWorktreeActive: (conversationId: string | null) => boolean;
   getWorktreeName: (conversationId: string | null) => string;
   setWorktreeActive: (conversationId: string | null, active: boolean, name: string) => void;
+  onTaskCreated?: () => void;
 }
 
 export function useChatState(): ChatStateResult {

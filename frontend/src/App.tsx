@@ -210,6 +210,7 @@ function AppContent() {
                 preferences={preferences}
                 showTasksPanel={showTasksPanel}
                 onTasksClose={() => setShowTasksPanel(false)}
+                onTasksPanelOpen={() => setShowTasksPanel(true)}
               />
             )}
             <div
