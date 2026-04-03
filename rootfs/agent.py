@@ -10,7 +10,6 @@ import os
 import signal
 import sys
 import uuid
-from collections.abc import AsyncIterator
 from typing import Any
 
 SOCKET_PATH = "/tmp/agent.sock"
@@ -414,12 +413,7 @@ async def _run_query_inner(
     # from the full AssistantEvent to avoid duplicates.
     emitted_streaming_text = False
     try:
-        # Pass slash commands as plain strings so the SDK can parse them.
-        # Regular messages use the streaming prompt format for session support.
-        prompt: str | AsyncIterator = (
-            content if content.startswith("/") else build_prompt_stream(content)
-        )
-        async for event in query(prompt=prompt, options=options):
+        async for event in query(prompt=build_prompt_stream(content), options=options):
             if hasattr(event, "session_id") and event.session_id:
                 captured_session_id = event.session_id
             if isinstance(event, StreamEvent):
