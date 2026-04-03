@@ -53,6 +53,7 @@ export interface ChatStateResult {
   // Agent feature state
   getTasksForConversation: (conversationId: string | null) => AgentTask[];
   upsertTask: (conversationId: string | null, task: Partial<AgentTask> & { id: string }) => void;
+  replaceTasks: (conversationId: string | null, tasks: AgentTask[]) => void;
   getTokenUsage: (conversationId: string | null) => TokenUsage;
   setTokenUsage: (conversationId: string | null, usage: TokenUsage) => void;
   isPlanActive: (conversationId: string | null) => boolean;
@@ -332,6 +333,19 @@ export function useChatState(): ChatStateResult {
     [],
   );
 
+  const replaceTasks = useCallback(
+    (conversationId: string | null, tasks: AgentTask[]) => {
+      if (!conversationId) return;
+      const map = new Map<string, AgentTask>();
+      for (const t of tasks) {
+        map.set(t.id, t);
+      }
+      tasksByConversation.current.set(conversationId, map);
+      setRenderTick((t) => t + 1);
+    },
+    [],
+  );
+
   const getTokenUsage = useCallback(
     (conversationId: string | null): TokenUsage => {
       if (!conversationId) return { estimatedTokens: 0, contextWindow: 200_000 };
@@ -423,6 +437,7 @@ export function useChatState(): ChatStateResult {
     bumpRender,
     getTasksForConversation,
     upsertTask,
+    replaceTasks,
     getTokenUsage,
     setTokenUsage,
     isPlanActive,

@@ -391,15 +391,12 @@ export function useSseHandlers(
           // Intercept TodoWrite — replaces entire task list from input
           if (name === "TodoWrite" && Array.isArray(input?.todos)) {
             const todos = input.todos as { content?: string; status?: string; activeForm?: string }[];
-            for (let i = 0; i < todos.length; i++) {
-              const t = todos[i];
-              chatState.upsertTask?.(session, {
-                id: String(i + 1),
-                subject: String(t.content ?? ""),
-                status: (t.status as "pending" | "in_progress" | "completed") ?? "pending",
-                activeForm: t.activeForm ? String(t.activeForm) : undefined,
-              });
-            }
+            chatState.replaceTasks?.(session, todos.map((t, i) => ({
+              id: String(i + 1),
+              subject: String(t.content ?? ""),
+              status: (t.status as "pending" | "in_progress" | "completed") ?? "pending",
+              activeForm: t.activeForm ? String(t.activeForm) : undefined,
+            })));
           }
 
           if (name === "AskUserQuestion") break;
@@ -485,14 +482,12 @@ export function useSseHandlers(
               const toolMsg = msgs.find((m) => m.id === msgId);
               if (toolMsg && toolMsg.type === "tool" && Array.isArray(toolMsg.toolInput?.todos)) {
                 const todos = toolMsg.toolInput.todos as { content?: string; status?: string; activeForm?: string }[];
-                for (let i = 0; i < todos.length; i++) {
-                  const t = todos[i];
-                  chatState.upsertTask?.(session, {
-                    id: String(i + 1),
-                    subject: String(t.content ?? ""),
-                    status: (t.status as "pending" | "in_progress" | "completed") ?? "pending",
-                    activeForm: t.activeForm ? String(t.activeForm) : undefined,
-                  });
+                chatState.replaceTasks?.(session, todos.map((t, i) => ({
+                  id: String(i + 1),
+                  subject: String(t.content ?? ""),
+                  status: (t.status as "pending" | "in_progress" | "completed") ?? "pending",
+                  activeForm: t.activeForm ? String(t.activeForm) : undefined,
+                })));
                 }
               }
             }
