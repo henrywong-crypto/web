@@ -65,10 +65,15 @@ const AssistantTurnCard = React.memo(function AssistantTurnCard({
 }) {
   const [hovered, setHovered] = useState(false);
   const firstMsg = messages[0];
+  const lastMsg = messages[messages.length - 1];
   const formattedTime = new Date(firstMsg.timestamp).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  // Total turn duration (only show after turn completes with multiple messages)
+  const turnDurationMs = messages.length > 1 ? lastMsg.timestamp - firstMsg.timestamp : 0;
+  const turnDurationSec = Math.floor(turnDurationMs / 1000);
 
   // Concatenate all assistant text content in this turn for the copy button
   const fullText = messages
@@ -94,6 +99,11 @@ const AssistantTurnCard = React.memo(function AssistantTurnCard({
         <span className="text-xs text-muted-foreground/50">
           {formattedTime}
         </span>
+        {turnDurationSec >= 2 && (
+          <span className="tabular-nums text-xs text-muted-foreground/30">
+            · {turnDurationSec < 60 ? `${turnDurationSec}s` : `${Math.floor(turnDurationSec / 60)}m ${turnDurationSec % 60}s`}
+          </span>
+        )}
         {hovered && fullText && (
           <span className="fade-in">
             <MessageCopyControl content={fullText} messageType="assistant" />

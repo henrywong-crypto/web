@@ -537,6 +537,8 @@ export function useSseHandlers(
             }
           }
           aqState.assistantMsgId = null;
+          // Stop the loading indicator — Claude is waiting for user input
+          setStreamPhase(conversation_id, { phase: "idle" });
           setSessionPendingQuestion(conversation_id, {
             requestId: request_id,
             taskId: task_id,

@@ -562,7 +562,7 @@ export default function ChatInterface({
       <div className="mx-auto w-full max-w-3xl">
         <ClaudeStatus
           key={viewConversationId ?? "none"}
-          isLoading={isCurrentRunning}
+          isLoading={isCurrentRunning && !pendingQuestion}
           streamPhase={streamPhase}
           startTime={streamStartTime}
           onAbort={handleStop}
