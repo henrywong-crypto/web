@@ -13,6 +13,7 @@ import ClaudeStatus from "./ClaudeStatus";
 import PlanApprovalCard from "./PlanApprovalCard";
 import QueueDrawer from "./QueueDrawer";
 import TokenIndicator from "./TokenIndicator";
+import TaskPanel from "./TaskPanel";
 import WorktreeBadge from "./WorktreeBadge";
 
 interface ChatInterfaceProps {
@@ -21,6 +22,8 @@ interface ChatInterfaceProps {
   onRunningConversationChange?: (runningIds: Set<string>) => void;
   onConversationCreated?: (conversation: Conversation) => void;
   preferences?: UiPreferences;
+  showTasksPanel?: boolean;
+  onTasksClose?: () => void;
 }
 
 export default function ChatInterface({
@@ -29,6 +32,8 @@ export default function ChatInterface({
   onRunningConversationChange,
   onConversationCreated,
   preferences,
+  showTasksPanel = false,
+  onTasksClose,
 }: ChatInterfaceProps) {
   const sseCtx = useSse();
   const {
@@ -390,6 +395,7 @@ export default function ChatInterface({
   const worktreeActive = chatState.isWorktreeActive(viewConversationId);
   const worktreeName = chatState.getWorktreeName(viewConversationId);
   const planActive = chatState.isPlanActive(viewConversationId);
+  const tasks = chatState.getTasksForConversation(viewConversationId);
 
   // Drain queued messages when any conversation stops running.
   // Compares the current runningConversationIds with the previous snapshot
@@ -521,6 +527,7 @@ export default function ChatInterface({
   }, []);
 
   return (
+    <div className="flex min-h-0 flex-1">
     <div
       className="relative flex min-h-0 flex-1 flex-col"
       onDragEnter={handleDragEnter}
@@ -600,6 +607,10 @@ export default function ChatInterface({
           />
         </>
       )}
+    </div>
+    {showTasksPanel && (
+      <TaskPanel tasks={tasks} onClose={() => onTasksClose?.()} />
+    )}
     </div>
   );
 }

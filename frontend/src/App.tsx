@@ -208,6 +208,8 @@ function AppContent() {
                 onRunningConversationChange={setRunningConversationIds}
                 onConversationCreated={setSelectedConversation}
                 preferences={preferences}
+                showTasksPanel={showTasksPanel}
+                onTasksClose={() => setShowTasksPanel(false)}
               />
             )}
             <div
