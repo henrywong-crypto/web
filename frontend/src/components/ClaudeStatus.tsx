@@ -36,17 +36,20 @@ export default function ClaudeStatus({
 }: ClaudeStatusProps) {
   const [elapsedTime, setElapsedTime] = useState(0);
 
+  // Use startedAt from stream phase (persists across conversation switches)
+  // Fall back to local timer if not available
   useEffect(() => {
     if (!isLoading) {
       setElapsedTime(0);
       return;
     }
-    const startTime = Date.now();
+    const startTime = streamPhase.startedAt ?? Date.now();
+    setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
     const timer = window.setInterval(() => {
       setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [isLoading]);
+  }, [isLoading, streamPhase.startedAt]);
 
   if (!isLoading) return null;
 

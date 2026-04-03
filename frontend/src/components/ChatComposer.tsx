@@ -331,20 +331,20 @@ export default function ChatComposer({
           </div>
 
           {/* Hints */}
-          <div className="mt-1 flex items-center justify-between px-1">
-            <span className="text-[10px] text-muted-foreground/30">
-              {stashedDraft ? (
-                <span className="text-primary/50">Draft saved — will restore when done</span>
-              ) : (
-                <><kbd className="font-sans">Shift+↵</kbd> new line</>
-              )}
-            </span>
-            {isLoading && queuedCount === 0 && !stashedDraft && (
+          {isLoading && queuedCount === 0 && !stashedDraft && (
+            <div className="mt-1 px-1">
               <span className="text-[10px] text-muted-foreground/30">
                 Messages will be queued until Claude finishes
               </span>
-            )}
-          </div>
+            </div>
+          )}
+          {stashedDraft && (
+            <div className="mt-1 px-1">
+              <span className="text-[10px] text-primary/50">
+                Draft saved — will restore when done
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
