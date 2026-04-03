@@ -465,6 +465,28 @@ export function useSseHandlers(
             chatState.setWorktreeActive?.(session, false, "");
           }
 
+          // Intercept TodoWrite at tool_result time — re-read todos from the
+          // stored ToolMessage input (tool_result itself is just a text string).
+          if (toolName === "TodoWrite") {
+            const msgId = ss.toolIdToMsgId.get(tool_use_id);
+            if (msgId) {
+              const msgs = getMessages(session);
+              const toolMsg = msgs.find((m) => m.id === msgId);
+              if (toolMsg && toolMsg.type === "tool" && Array.isArray(toolMsg.toolInput?.todos)) {
+                const todos = toolMsg.toolInput.todos as { content?: string; status?: string; activeForm?: string }[];
+                for (let i = 0; i < todos.length; i++) {
+                  const t = todos[i];
+                  chatState.upsertTask?.(session, {
+                    id: String(i + 1),
+                    subject: String(t.content ?? ""),
+                    status: (t.status as "pending" | "in_progress" | "completed") ?? "pending",
+                    activeForm: t.activeForm ? String(t.activeForm) : undefined,
+                  });
+                }
+              }
+            }
+          }
+
           const msgId = ss.toolIdToMsgId.get(tool_use_id);
           if (msgId) {
             updateMessageById(session, msgId, (m) => {

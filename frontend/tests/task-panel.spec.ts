@@ -188,7 +188,7 @@ test.describe("task tool renderers", () => {
     await expect(card.getByText("blocked by #2")).toBeVisible();
   });
 
-  test("TodoWrite renders as todo list card and populates task widget", async ({
+  test("TodoWrite is hidden from chat but populates task widget", async ({
     page,
   }) => {
     const ctrl = await setupApp(page, { sessions: [] });
@@ -212,11 +212,14 @@ test.describe("task tool renderers", () => {
 
     await expect(page.getByText("Updated todos.")).toBeVisible();
 
-    // Chat card should show TodoWrite as a compact list
+    // TodoWrite should NOT render a card in the chat stream
     const card = page.getByTestId("assistant-card").last();
-    await expect(card.getByText("Todos (2)")).toBeVisible();
-    await expect(card.getByText("Fix auth bug")).toBeVisible();
-    await expect(card.getByText("Write tests")).toBeVisible();
+    await expect(card.getByText("Todos (2)")).not.toBeVisible();
+
+    // But task widget above composer should show the todos
+    // in_progress task shows activeForm, not subject
+    await expect(page.getByText("Fixing auth")).toBeVisible();
+    await expect(page.getByText("Write tests")).toBeVisible();
   });
 });
 

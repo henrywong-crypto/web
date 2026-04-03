@@ -40,9 +40,9 @@ export default function ToolRenderer({
     return <TaskToolCard toolName={toolName} toolInput={toolInput} toolResult={toolResult} />;
   }
 
-  // Render TodoWrite as a task list card
-  if (toolName === "TodoWrite") {
-    return <TodoWriteCard toolInput={toolInput} />;
+  // Hide TodoWrite/TodoRead from chat — they only populate the TaskWidget
+  if (toolName === "TodoWrite" || toolName === "TodoRead") {
+    return null;
   }
 
   // Render memory notification for Write/Edit to memory files
