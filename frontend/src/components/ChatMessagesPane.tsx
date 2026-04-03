@@ -166,7 +166,10 @@ export default function ChatMessagesPane({
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [searchCurrent, searchMatches]);
 
-  // Ctrl+F handler
+  // Message selection state
+  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
+
+  // Ctrl+F and Esc handler
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "f") {
@@ -180,9 +183,6 @@ export default function ChatMessagesPane({
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [selectedMsgIds.size]);
-
-  // Message selection state
-  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
 
   const toggleSelect = useCallback((msgId: string, ctrlKey: boolean) => {
     if (!ctrlKey) return;
