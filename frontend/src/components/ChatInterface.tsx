@@ -200,6 +200,7 @@ export default function ChatInterface({
         timestamp: Date.now(),
       });
       addRunningConversation(targetConversationId);
+      chatState.setStreamStartTime?.(targetConversationId, Date.now());
 
       sseCtx.sendQuery(text, targetConversationId, sessionId);
     },

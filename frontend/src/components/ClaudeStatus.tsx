@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { CheckCircle2 } from "lucide-react";
 import type { StreamPhaseInfo } from "../types";
 
 function formatElapsedTime(totalSeconds: number): string {
@@ -23,6 +24,8 @@ function phaseLabel(info: StreamPhaseInfo): string {
   }
 }
 
+const DONE_DISPLAY_MS = 4000;
+
 interface ClaudeStatusProps {
   isLoading: boolean;
   streamPhase: StreamPhaseInfo;
@@ -36,21 +39,52 @@ export default function ClaudeStatus({
   startTime,
   onAbort,
 }: ClaudeStatusProps) {
-  // Tick to force re-render every second
   const [, setTick] = useState(0);
+  const [doneInfo, setDoneInfo] = useState<{ elapsed: number } | null>(null);
+  const prevLoading = useRef(isLoading);
 
+  // Tick every second while loading
   useEffect(() => {
     if (!isLoading) return;
     const timer = window.setInterval(() => setTick((t) => t + 1), 1000);
     return () => window.clearInterval(timer);
   }, [isLoading]);
 
+  // Show "Done" state when loading transitions to false
+  useEffect(() => {
+    if (prevLoading.current && !isLoading && startTime) {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      if (elapsed >= 1) {
+        setDoneInfo({ elapsed });
+        const timer = setTimeout(() => setDoneInfo(null), DONE_DISPLAY_MS);
+        return () => clearTimeout(timer);
+      }
+    }
+    prevLoading.current = isLoading;
+  }, [isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show "Done · Xs" briefly after completion
+  if (!isLoading && doneInfo) {
+    return (
+      <div className="px-4 py-2">
+        <div className="flex items-center gap-2.5">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          <span className="text-sm font-medium text-emerald-500/70">
+            Done
+            <span className="ml-1.5 tabular-nums font-normal text-muted-foreground/35">
+              · {formatElapsedTime(doneInfo.elapsed)}
+            </span>
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   if (!isLoading) return null;
 
-  // Compute elapsed from the per-conversation start time (stored in ref, survives switches)
   const elapsedTime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
   const statusText = phaseLabel(streamPhase);
-  const elapsedLabel = elapsedTime > 0 ? formatElapsedTime(elapsedTime) : "";
+  const elapsedLabel = formatElapsedTime(elapsedTime);
 
   return (
     <div className="px-4 py-2">
@@ -66,11 +100,9 @@ export default function ClaudeStatus({
         </span>
         <span className="text-sm font-medium text-muted-foreground">
           {statusText}
-          {elapsedLabel && (
-            <span className="ml-1.5 tabular-nums font-normal text-muted-foreground/35">
-              · {elapsedLabel}
-            </span>
-          )}
+          <span className="ml-1.5 tabular-nums font-normal text-muted-foreground/35">
+            · {elapsedLabel}
+          </span>
         </span>
       </div>
     </div>
