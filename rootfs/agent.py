@@ -388,7 +388,8 @@ async def _run_query_inner(
 
     options = ClaudeAgentOptions(
         cwd=work_dir,
-        setting_sources=["user"],
+        setting_sources=["user", "project"],
+        allowed_tools=["Skill"],
         can_use_tool=handle_tool_permission,
         mcp_servers=load_mcp_servers(),
         env={"CLAUDE_CODE_ENTRYPOINT": "cli"},
