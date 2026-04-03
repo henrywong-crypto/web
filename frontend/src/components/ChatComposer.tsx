@@ -330,14 +330,6 @@ export default function ChatComposer({
             )}
           </div>
 
-          {/* Hints */}
-          {isLoading && queuedCount === 0 && !stashedDraft && (
-            <div className="mt-1.5 px-1">
-              <span className="text-xs text-muted-foreground/60">
-                Messages will be queued until Claude finishes
-              </span>
-            </div>
-          )}
           {stashedDraft && (
             <div className="mt-1.5 px-1">
               <span className="text-xs text-primary/70">
