@@ -425,7 +425,6 @@ export function useSseHandlers(
                   description: "",
                   status: "pending",
                 });
-                chatState.onTaskCreated?.();
               } else if (toolName === "TaskUpdate" && parsed.taskId) {
                 chatState.upsertTask?.(session, {
                   id: parsed.taskId,

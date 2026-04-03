@@ -13,7 +13,7 @@ import ClaudeStatus from "./ClaudeStatus";
 import PlanApprovalCard from "./PlanApprovalCard";
 import QueueDrawer from "./QueueDrawer";
 import TokenIndicator from "./TokenIndicator";
-import TaskPanel from "./TaskPanel";
+import TaskWidget from "./TaskWidget";
 import WorktreeBadge from "./WorktreeBadge";
 
 interface ChatInterfaceProps {
@@ -22,9 +22,6 @@ interface ChatInterfaceProps {
   onRunningConversationChange?: (runningIds: Set<string>) => void;
   onConversationCreated?: (conversation: Conversation) => void;
   preferences?: UiPreferences;
-  showTasksPanel?: boolean;
-  onTasksClose?: () => void;
-  onTasksPanelOpen?: () => void;
 }
 
 export default function ChatInterface({
@@ -33,9 +30,6 @@ export default function ChatInterface({
   onRunningConversationChange,
   onConversationCreated,
   preferences,
-  showTasksPanel = false,
-  onTasksClose,
-  onTasksPanelOpen,
 }: ChatInterfaceProps) {
   const sseCtx = useSse();
   const {
@@ -48,9 +42,6 @@ export default function ChatInterface({
     getQuestionsForConversation,
   } = sseCtx;
   const chatState = useChatState();
-
-  // Auto-open task panel when TaskCreate fires
-  chatState.onTaskCreated = onTasksPanelOpen;
 
   const [composerFocusKey, setComposerFocusKey] = useState(0);
 
@@ -532,7 +523,6 @@ export default function ChatInterface({
   }, []);
 
   return (
-    <div className="flex min-h-0 flex-1">
     <div
       className="relative flex min-h-0 flex-1 flex-col"
       onDragEnter={handleDragEnter}
@@ -575,6 +565,7 @@ export default function ChatInterface({
           onAbort={handleStop}
         />
       </div>
+      <TaskWidget tasks={tasks} />
       {pendingQuestion ? (
         <div className="flex-shrink-0 border-t border-border p-4">
           <div className="mx-auto max-w-3xl">
@@ -612,10 +603,6 @@ export default function ChatInterface({
           />
         </>
       )}
-    </div>
-    {showTasksPanel && (
-      <TaskPanel tasks={tasks} onClose={() => onTasksClose?.()} />
-    )}
     </div>
   );
 }

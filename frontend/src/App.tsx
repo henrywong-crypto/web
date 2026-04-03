@@ -6,7 +6,6 @@ import ChatInterface from "./components/ChatInterface";
 import Terminal from "./components/Terminal";
 import type { TerminalHandle } from "./components/Terminal";
 import FileManager from "./components/FileManager";
-import MemoryPanel from "./components/MemoryPanel";
 import MobileNav from "./components/MobileNav";
 import SettingsPanel from "./components/SettingsPanel";
 import { useUiPreferences } from "./hooks/useUiPreferences";
@@ -66,8 +65,6 @@ function AppContent() {
   const [showSettings, setShowSettings] = useState(false);
   const { preferences, setPreference } = useUiPreferences();
   const [showFilesPanel, setShowFilesPanel] = useState(false);
-  const [showTasksPanel, setShowTasksPanel] = useState(false);
-  const [showMemoryPanel, setShowMemoryPanel] = useState(false);
   const terminalRef = useRef<TerminalHandle>(null);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
@@ -148,8 +145,6 @@ function AppContent() {
         csrfFetch={csrfFetch}
         onSettingsOpen={() => setShowSettings(true)}
         onFilesOpen={() => setShowFilesPanel(true)}
-        onTasksOpen={() => setShowTasksPanel((v) => !v)}
-        onMemoryOpen={() => setShowMemoryPanel(true)}
         darkMode={darkMode}
         onToggleDarkMode={toggleDarkMode}
       />
@@ -208,9 +203,6 @@ function AppContent() {
                 onRunningConversationChange={setRunningConversationIds}
                 onConversationCreated={setSelectedConversation}
                 preferences={preferences}
-                showTasksPanel={showTasksPanel}
-                onTasksClose={() => setShowTasksPanel(false)}
-                onTasksPanelOpen={() => setShowTasksPanel(true)}
               />
             )}
             <div
@@ -248,10 +240,6 @@ function AppContent() {
             <FileManager onClose={closeFilesPanel} />
           </div>
         </div>
-      )}
-
-      {showMemoryPanel && (
-        <MemoryPanel onClose={() => setShowMemoryPanel(false)} />
       )}
 
       <MobileNav

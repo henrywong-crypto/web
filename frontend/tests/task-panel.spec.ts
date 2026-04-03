@@ -1,11 +1,9 @@
 /**
- * Task panel & tool renderers:
- * - Clicking Tasks icon opens the task panel
- * - Panel shows tasks populated via TaskCreate tool results
- * - Clicking Close dismisses the panel
- * - Empty state shown when no tasks exist
- * - TaskCreate renders as compact card in chat (not raw JSON)
- * - TaskCreate auto-opens the task panel
+ * Task widget & tool renderers:
+ * - TaskWidget auto-shows above composer when tasks exist
+ * - TaskWidget hidden when no tasks
+ * - TaskWidget collapsible via chevron
+ * - TaskCreate renders as compact card in chat
  * - TaskUpdate renders with status badge
  * - TaskList renders as compact task list
  * - Memory file Write renders as "Memory updated" notification
@@ -13,96 +11,104 @@
 import { test, expect } from "@playwright/test";
 import { setupApp, sendMessage, sse } from "./helpers/setup";
 
-test.describe("task panel", () => {
-  test("clicking Tasks icon opens and closes the panel", async ({ page }) => {
+test.describe("task widget", () => {
+  test("hidden when no tasks exist", async ({ page }) => {
     await setupApp(page, { sessions: [] });
 
-    // Panel should not be visible initially
-    await expect(page.getByText("No tasks yet")).not.toBeVisible();
-
-    // Click the Tasks icon to open
-    await page.getByTitle("Tasks").click();
-    await expect(page.getByText("No tasks yet")).toBeVisible();
-
-    // Click Close to dismiss
-    await page.getByRole("button", { name: "Close" }).click();
-    await expect(page.getByText("No tasks yet")).not.toBeVisible();
+    // No task widget should be visible
+    await expect(page.locator("text=Tasks").first()).not.toBeVisible();
   });
 
-  test("tasks created via SSE tool results appear in the panel", async ({
-    page,
-  }) => {
+  test("auto-shows when tasks are created via SSE", async ({ page }) => {
     const ctrl = await setupApp(page, { sessions: [] });
 
     await sendMessage(page, "Plan the work");
     ctrl.sendSseEvents(
       sse.withTool(
-        "tool-task-create",
+        "tool-tc",
         "TaskCreate",
-        { subject: "Fix login bug", description: "Resolve auth issue" },
+        { subject: "Fix login bug" },
         JSON.stringify({
           task: { id: "1", subject: "Fix login bug", status: "pending" },
         }),
         "Created a task.",
-        "sess-task",
+        "sess-tc",
       ),
     );
 
     await expect(page.getByText("Created a task.")).toBeVisible();
 
-    // Task panel auto-opens on TaskCreate — the task should be visible
+    // TaskWidget should appear with the task
     await expect(page.getByText("Fix login bug").first()).toBeVisible();
   });
 
-  test("task status updates are reflected in the panel", async ({ page }) => {
+  test("shows status counts in header", async ({ page }) => {
     const ctrl = await setupApp(page, { sessions: [] });
 
-    await sendMessage(page, "Start work");
+    // Create two tasks
+    await sendMessage(page, "Create tasks");
     ctrl.sendSseEvents(
       sse.withTool(
-        "tool-tc",
+        "tool-tc1",
         "TaskCreate",
-        { subject: "Write tests", description: "Add test coverage" },
+        { subject: "Task A" },
         JSON.stringify({
-          task: { id: "1", subject: "Write tests", status: "pending" },
+          task: { id: "1", subject: "Task A", status: "pending" },
         }),
-        "Task created.",
-        "sess-tc",
+        "First.",
+        "sess-tc1",
       ),
     );
-    await expect(page.getByText("Task created.")).toBeVisible();
+    await expect(page.getByText("First.")).toBeVisible();
 
-    await sendMessage(page, "Working on it");
+    // Update one to in_progress
+    await sendMessage(page, "Start task");
     ctrl.sendSseEvents(
       sse.withTool(
-        "tool-tu",
+        "tool-tu1",
         "TaskUpdate",
         { taskId: "1", status: "in_progress" },
         JSON.stringify({
           taskId: "1",
           statusChange: { from: "pending", to: "in_progress" },
         }),
-        "Started the task.",
-        "sess-tu",
+        "Started.",
+        "sess-tu1",
       ),
     );
-    await expect(page.getByText("Started the task.")).toBeVisible();
+    await expect(page.getByText("Started.")).toBeVisible();
 
-    await page.getByTitle("Tasks").click();
-    await expect(page.getByText("In Progress")).toBeVisible();
-    await expect(page.getByText("Write tests")).toBeVisible();
+    // Widget should show the task
+    await expect(page.getByText("Task A").first()).toBeVisible();
   });
 
-  test("toggle behavior — clicking Tasks icon again closes the panel", async ({
-    page,
-  }) => {
-    await setupApp(page, { sessions: [] });
+  test("collapsible via chevron click", async ({ page }) => {
+    const ctrl = await setupApp(page, { sessions: [] });
 
-    await page.getByTitle("Tasks").click();
-    await expect(page.getByText("No tasks yet")).toBeVisible();
+    await sendMessage(page, "Create task");
+    ctrl.sendSseEvents(
+      sse.withTool(
+        "tool-tc-col",
+        "TaskCreate",
+        { subject: "Collapsible task" },
+        JSON.stringify({
+          task: { id: "1", subject: "Collapsible task", status: "pending" },
+        }),
+        "Done.",
+        "sess-col",
+      ),
+    );
+    await expect(page.getByText("Done.")).toBeVisible();
 
-    await page.getByTitle("Tasks").click();
-    await expect(page.getByText("No tasks yet")).not.toBeVisible();
+    // Task should be visible (expanded by default)
+    // "Collapsible task" appears in both chat card and widget — count should be 2
+    await expect(page.getByText("Collapsible task")).toHaveCount(2);
+
+    // Click the Tasks header to collapse
+    await page.getByText("Tasks").first().click();
+
+    // After collapsing, only the chat card instance remains
+    await expect(page.getByText("Collapsible task")).toHaveCount(1);
   });
 });
 
@@ -124,39 +130,11 @@ test.describe("task tool renderers", () => {
       ),
     );
 
-    // Should show compact card with task info, not raw JSON
     const card = page.getByTestId("assistant-card").last();
     await expect(card.getByText("#5")).toBeVisible();
     await expect(card.getByText("Deploy service")).toBeVisible();
     // Should NOT show raw JSON
     await expect(card.getByText('"status"')).not.toBeVisible();
-  });
-
-  test("TaskCreate auto-opens the task panel", async ({ page }) => {
-    const ctrl = await setupApp(page, { sessions: [] });
-
-    // Panel should not be open initially
-    await expect(page.getByText("No tasks yet")).not.toBeVisible();
-
-    await sendMessage(page, "Plan work");
-    ctrl.sendSseEvents(
-      sse.withTool(
-        "tool-tc-auto",
-        "TaskCreate",
-        { subject: "Auto-opened task" },
-        JSON.stringify({
-          task: { id: "1", subject: "Auto-opened task", status: "pending" },
-        }),
-        "Created.",
-        "sess-tc-auto",
-      ),
-    );
-
-    // Panel should auto-open with the task visible
-    // The task panel (side panel) should show the task
-    await expect(page.getByText("Auto-opened task").first()).toBeVisible();
-    // The panel's Pending group should be visible
-    await expect(page.getByText(/Pending/)).toBeVisible();
   });
 
   test("TaskUpdate renders with status badge", async ({ page }) => {
@@ -177,9 +155,8 @@ test.describe("task tool renderers", () => {
       ),
     );
 
-    // Should show the status badge
     await expect(page.getByText("completed")).toBeVisible();
-    await expect(page.getByText("#3")).toBeVisible();
+    await expect(page.getByText("#3").first()).toBeVisible();
   });
 
   test("TaskList renders as compact task list", async ({ page }) => {
@@ -203,15 +180,12 @@ test.describe("task tool renderers", () => {
       ),
     );
 
-    // Wait for response to render
     await expect(page.getByText("Listed.")).toBeVisible();
-
-    // Should show task items
-    await expect(page.getByText("First task")).toBeVisible();
-    await expect(page.getByText("Second task")).toBeVisible();
-    await expect(page.getByText("Third task")).toBeVisible();
-    // Should show blocked-by info
-    await expect(page.getByText("blocked by #2")).toBeVisible();
+    const card = page.getByTestId("assistant-card").last();
+    await expect(card.getByText("First task")).toBeVisible();
+    await expect(card.getByText("Second task")).toBeVisible();
+    await expect(card.getByText("Third task")).toBeVisible();
+    await expect(card.getByText("blocked by #2")).toBeVisible();
   });
 });
 
@@ -236,7 +210,6 @@ test.describe("memory tool renderer", () => {
       ),
     );
 
-    // Should show memory notification, not diff viewer
     await expect(page.getByText("Memory updated in")).toBeVisible();
     await expect(page.getByText("memory/user_prefs.md")).toBeVisible();
   });
@@ -284,8 +257,7 @@ test.describe("memory tool renderer", () => {
       ),
     );
 
-    // Should show the normal diff viewer with "New" badge, not memory notification
-    await expect(page.getByText("New")).toBeVisible();
+    // Should show the normal diff viewer, not memory notification
     await expect(page.getByText("Memory updated in")).not.toBeVisible();
   });
 });

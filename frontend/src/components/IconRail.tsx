@@ -1,8 +1,6 @@
 import React from "react";
 import {
-  Brain,
   FolderOpen,
-  ListTodo,
   LogOut,
   MessageSquare,
   Moon,
@@ -23,11 +21,8 @@ interface IconRailProps {
   ) => Promise<Response>;
   onSettingsOpen: () => void;
   onFilesOpen: () => void;
-  onTasksOpen?: () => void;
-  onMemoryOpen?: () => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
-  taskCount?: number;
 }
 
 export default function IconRail({
@@ -37,11 +32,8 @@ export default function IconRail({
   csrfFetch,
   onSettingsOpen,
   onFilesOpen,
-  onTasksOpen,
-  onMemoryOpen,
   darkMode,
   onToggleDarkMode,
-  taskCount,
 }: IconRailProps) {
   return (
     <div className="hidden w-12 flex-col items-center gap-1 border-r border-border bg-card py-3 md:flex">
@@ -61,19 +53,6 @@ export default function IconRail({
       </NavButton>
       <NavButton title="Files" onClick={onFilesOpen}>
         <FolderOpen className="h-4 w-4" />
-      </NavButton>
-      <NavButton title="Tasks" onClick={onTasksOpen}>
-        <div className="relative">
-          <ListTodo className="h-4 w-4" />
-          {(taskCount ?? 0) > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground">
-              {taskCount}
-            </span>
-          )}
-        </div>
-      </NavButton>
-      <NavButton title="Memory" onClick={onMemoryOpen}>
-        <Brain className="h-4 w-4" />
       </NavButton>
 
       <div className="mt-auto flex flex-col items-center gap-1">
