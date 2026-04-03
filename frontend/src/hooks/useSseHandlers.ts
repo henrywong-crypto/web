@@ -377,6 +377,20 @@ export function useSseHandlers(
             chatState.setWorktreeActive?.(session, true, String(input?.name ?? ""));
           }
 
+          // Intercept TodoWrite — replaces entire task list from input
+          if (name === "TodoWrite" && Array.isArray(input?.todos)) {
+            const todos = input.todos as { content?: string; status?: string; activeForm?: string }[];
+            for (let i = 0; i < todos.length; i++) {
+              const t = todos[i];
+              chatState.upsertTask?.(session, {
+                id: String(i + 1),
+                subject: String(t.content ?? ""),
+                status: (t.status as "pending" | "in_progress" | "completed") ?? "pending",
+                activeForm: t.activeForm ? String(t.activeForm) : undefined,
+              });
+            }
+          }
+
           if (name === "AskUserQuestion") break;
           const msgId = generateId();
           ss.toolIdToMsgId.set(toolId, msgId);
@@ -413,7 +427,9 @@ export function useSseHandlers(
             contextWindow: 200_000,
           });
 
-          // Intercept task tool results
+          // Intercept task tool results (TaskCreate/TaskUpdate/TaskList/TaskGet
+          // are client-side tools from Claude Code CLI; they won't appear in our
+          // web app but we keep basic handling in case the tool set is extended.)
           const toolName = ss.toolIdToName.get(tool_use_id);
           if (toolName === "TaskCreate" || toolName === "TaskUpdate" || toolName === "TaskList" || toolName === "TaskGet") {
             try {

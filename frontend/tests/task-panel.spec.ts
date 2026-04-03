@@ -187,6 +187,37 @@ test.describe("task tool renderers", () => {
     await expect(card.getByText("Third task")).toBeVisible();
     await expect(card.getByText("blocked by #2")).toBeVisible();
   });
+
+  test("TodoWrite renders as todo list card and populates task widget", async ({
+    page,
+  }) => {
+    const ctrl = await setupApp(page, { sessions: [] });
+
+    await sendMessage(page, "Plan tasks");
+    ctrl.sendSseEvents(
+      sse.withTool(
+        "tool-todo",
+        "TodoWrite",
+        {
+          todos: [
+            { content: "Fix auth bug", status: "in_progress", activeForm: "Fixing auth" },
+            { content: "Write tests", status: "pending", activeForm: "Writing tests" },
+          ],
+        },
+        "Todos have been modified successfully.",
+        "Updated todos.",
+        "sess-todo",
+      ),
+    );
+
+    await expect(page.getByText("Updated todos.")).toBeVisible();
+
+    // Chat card should show TodoWrite as a compact list
+    const card = page.getByTestId("assistant-card").last();
+    await expect(card.getByText("Todos (2)")).toBeVisible();
+    await expect(card.getByText("Fix auth bug")).toBeVisible();
+    await expect(card.getByText("Write tests")).toBeVisible();
+  });
 });
 
 test.describe("memory tool renderer", () => {

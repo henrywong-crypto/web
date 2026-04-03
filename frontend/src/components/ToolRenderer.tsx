@@ -40,6 +40,11 @@ export default function ToolRenderer({
     return <TaskToolCard toolName={toolName} toolInput={toolInput} toolResult={toolResult} />;
   }
 
+  // Render TodoWrite as a task list card
+  if (toolName === "TodoWrite") {
+    return <TodoWriteCard toolInput={toolInput} />;
+  }
+
   // Render memory notification for Write/Edit to memory files
   if (isMemoryFile(toolName, toolInput)) {
     return <MemoryUpdateCard toolInput={toolInput} />;
@@ -259,6 +264,56 @@ function MemoryUpdateCard({ toolInput }: { toolInput: Record<string, unknown> })
         Memory updated in{" "}
         <span className="font-mono text-xs text-primary">{displayPath}</span>
       </span>
+    </div>
+  );
+}
+
+// ── TodoWrite card ─────────────────────────────────────────────────────────
+
+function TodoWriteCard({ toolInput }: { toolInput: Record<string, unknown> }) {
+  const todos = Array.isArray(toolInput.todos) ? toolInput.todos : [];
+
+  if (todos.length === 0) {
+    return (
+      <div className="my-0.5 flex items-center gap-2 rounded-xl border border-border/60 bg-card px-3 py-2 shadow-sm">
+        <ListTodo className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <span className="text-sm text-muted-foreground">Todos cleared</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-0.5 overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <ListTodo className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">
+          Todos ({todos.length})
+        </span>
+      </div>
+      <div className="border-t border-border/40 px-3 py-1.5">
+        {todos.slice(0, 10).map((todo, i) => {
+          const t = todo as Record<string, unknown>;
+          const status = String(t.status ?? "pending");
+          const content = String(t.content ?? "");
+          const config = TASK_STATUS_ICON[status] ?? TASK_STATUS_ICON.pending;
+          const Icon = config.icon;
+          return (
+            <div key={i} className="flex items-center gap-2 py-0.5">
+              <Icon
+                className={`h-3 w-3 flex-shrink-0 ${config.color} ${config.animate ? "animate-spin" : ""}`}
+              />
+              <span className="min-w-0 truncate text-xs text-foreground/80">
+                {content}
+              </span>
+            </div>
+          );
+        })}
+        {todos.length > 10 && (
+          <div className="py-0.5 text-[10px] text-muted-foreground/50">
+            +{todos.length - 10} more
+          </div>
+        )}
+      </div>
     </div>
   );
 }
