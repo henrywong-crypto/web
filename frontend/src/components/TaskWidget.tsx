@@ -7,6 +7,7 @@ interface TaskWidgetProps {
 }
 
 const MAX_VISIBLE = 5;
+const AUTO_HIDE_MS = 5000;
 
 const STATUS_ORDER: Record<string, number> = {
   in_progress: 0,
@@ -32,16 +33,39 @@ const STATUS_CONFIG = {
 
 export default function TaskWidget({ tasks }: TaskWidgetProps) {
   const [collapsed, setCollapsed] = React.useState(false);
-
-  if (tasks.length === 0) return null;
-
-  const sorted = [...tasks].sort(
-    (a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9),
-  );
+  const [hidden, setHidden] = React.useState(false);
+  const hideTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const inProgress = tasks.filter((t) => t.status === "in_progress").length;
   const pending = tasks.filter((t) => t.status === "pending").length;
   const completed = tasks.filter((t) => t.status === "completed").length;
+  const allDone = tasks.length > 0 && inProgress === 0 && pending === 0;
+
+  // Auto-hide when all tasks complete, show again if new tasks arrive
+  React.useEffect(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+
+    if (allDone) {
+      setCollapsed(true);
+      hideTimerRef.current = setTimeout(() => setHidden(true), AUTO_HIDE_MS);
+    } else if (tasks.length > 0) {
+      setHidden(false);
+      setCollapsed(false);
+    }
+
+    return () => {
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    };
+  }, [allDone, tasks.length]);
+
+  if (tasks.length === 0 || hidden) return null;
+
+  const sorted = [...tasks].sort(
+    (a, b) => (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9),
+  );
   const visible = sorted.slice(0, MAX_VISIBLE);
   const overflow = sorted.length - MAX_VISIBLE;
 
@@ -51,7 +75,14 @@ export default function TaskWidget({ tasks }: TaskWidgetProps) {
         {/* Header */}
         <button
           type="button"
-          onClick={() => setCollapsed((v) => !v)}
+          onClick={() => {
+            if (hidden) {
+              setHidden(false);
+              setCollapsed(false);
+            } else {
+              setCollapsed((v) => !v);
+            }
+          }}
           className="flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors hover:bg-accent/30"
         >
           {collapsed ? (
@@ -80,6 +111,9 @@ export default function TaskWidget({ tasks }: TaskWidgetProps) {
                 <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" />
                 {completed}
               </span>
+            )}
+            {allDone && (
+              <span className="text-emerald-500">All done</span>
             )}
           </div>
         </button>

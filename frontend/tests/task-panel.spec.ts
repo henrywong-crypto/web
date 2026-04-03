@@ -6,7 +6,7 @@
  * - TaskCreate renders as compact card in chat
  * - TaskUpdate renders with status badge
  * - TaskList renders as compact task list
- * - Memory file Write renders as "Memory updated" notification
+ * - TodoWrite hidden from chat but populates task widget
  */
 import { test, expect } from "@playwright/test";
 import { setupApp, sendMessage, sse } from "./helpers/setup";
@@ -220,78 +220,5 @@ test.describe("task tool renderers", () => {
     // in_progress task shows activeForm, not subject
     await expect(page.getByText("Fixing auth")).toBeVisible();
     await expect(page.getByText("Write tests")).toBeVisible();
-  });
-});
-
-test.describe("memory tool renderer", () => {
-  test("Write to memory file renders as memory notification", async ({
-    page,
-  }) => {
-    const ctrl = await setupApp(page, { sessions: [] });
-
-    await sendMessage(page, "Remember this");
-    ctrl.sendSseEvents(
-      sse.withTool(
-        "tool-mem-write",
-        "Write",
-        {
-          file_path: "/home/user/.claude/projects/myproject/memory/user_prefs.md",
-          content: "---\nname: user prefs\n---\nPrefers dark mode",
-        },
-        "Wrote 3 lines to memory/user_prefs.md",
-        "Saved to memory.",
-        "sess-mem",
-      ),
-    );
-
-    await expect(page.getByText("Memory updated in")).toBeVisible();
-    await expect(page.getByText("memory/user_prefs.md")).toBeVisible();
-  });
-
-  test("Write to MEMORY.md renders as memory notification", async ({
-    page,
-  }) => {
-    const ctrl = await setupApp(page, { sessions: [] });
-
-    await sendMessage(page, "Update index");
-    ctrl.sendSseEvents(
-      sse.withTool(
-        "tool-mem-index",
-        "Write",
-        {
-          file_path: "/home/user/.claude/projects/myproject/memory/MEMORY.md",
-          content: "- [Prefs](user_prefs.md) — user preferences",
-        },
-        "Wrote 1 line to MEMORY.md",
-        "Updated index.",
-        "sess-mem-idx",
-      ),
-    );
-
-    await expect(page.getByText("Memory updated in")).toBeVisible();
-  });
-
-  test("Write to non-memory file renders normally with diff", async ({
-    page,
-  }) => {
-    const ctrl = await setupApp(page, { sessions: [] });
-
-    await sendMessage(page, "Write code");
-    ctrl.sendSseEvents(
-      sse.withTool(
-        "tool-write-code",
-        "Write",
-        {
-          file_path: "/home/user/project/src/main.ts",
-          content: 'console.log("hello");',
-        },
-        "Wrote 1 line to src/main.ts",
-        "File written.",
-        "sess-write-code",
-      ),
-    );
-
-    // Should show the normal diff viewer, not memory notification
-    await expect(page.getByText("Memory updated in")).not.toBeVisible();
   });
 });

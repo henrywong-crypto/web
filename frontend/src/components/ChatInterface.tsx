@@ -12,7 +12,6 @@ import ChatMessagesPane from "./ChatMessagesPane";
 import ClaudeStatus from "./ClaudeStatus";
 import PlanApprovalCard from "./PlanApprovalCard";
 import QueueDrawer from "./QueueDrawer";
-import TokenIndicator from "./TokenIndicator";
 import TaskWidget from "./TaskWidget";
 import WorktreeBadge from "./WorktreeBadge";
 
@@ -387,7 +386,6 @@ export default function ChatInterface({
     viewConversationId !== null && isConversationRunning(viewConversationId);
   const streamPhase = chatState.getStreamPhase(viewConversationId);
   const messageQueue = getQueue(viewConversationId);
-  const tokenUsage = chatState.getTokenUsage(viewConversationId);
   const worktreeActive = chatState.isWorktreeActive(viewConversationId);
   const worktreeName = chatState.getWorktreeName(viewConversationId);
   const planActive = chatState.isPlanActive(viewConversationId);
@@ -538,15 +536,9 @@ export default function ChatInterface({
         </div>
       )}
       {/* Status badges */}
-      {(worktreeActive || tokenUsage.estimatedTokens > 1000) && (
+      {worktreeActive && (
         <div className="flex items-center gap-2 border-b border-border/50 px-4 py-1.5">
-          {worktreeActive && <WorktreeBadge name={worktreeName} />}
-          <div className="flex-1" />
-          <TokenIndicator
-            estimatedTokens={tokenUsage.estimatedTokens}
-            contextWindow={tokenUsage.contextWindow}
-            onCompact={() => handleSend("/compact")}
-          />
+          <WorktreeBadge name={worktreeName} />
         </div>
       )}
       <ChatMessagesPane

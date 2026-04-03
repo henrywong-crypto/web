@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Brain,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -43,11 +42,6 @@ export default function ToolRenderer({
   // Hide TodoWrite/TodoRead from chat — they only populate the TaskWidget
   if (toolName === "TodoWrite" || toolName === "TodoRead") {
     return null;
-  }
-
-  // Render memory notification for Write/Edit to memory files
-  if (isMemoryFile(toolName, toolInput)) {
-    return <MemoryUpdateCard toolInput={toolInput} />;
   }
 
   return (
@@ -241,29 +235,6 @@ function TaskToolCard({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Memory file helpers ────────────────────────────────────────────────────
-
-function isMemoryFile(toolName: string, toolInput: Record<string, unknown>): boolean {
-  if (toolName !== "Write" && toolName !== "Edit") return false;
-  const filePath = String(toolInput.file_path ?? "");
-  return filePath.includes("/memory/") || filePath.endsWith("MEMORY.md");
-}
-
-function MemoryUpdateCard({ toolInput }: { toolInput: Record<string, unknown> }) {
-  const filePath = String(toolInput.file_path ?? "");
-  // Show a short relative-ish path
-  const displayPath = filePath.replace(/^.*\/(\.claude\/)/, "$1").replace(/^.*\/memory\//, "memory/");
-  return (
-    <div className="my-0.5 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 shadow-sm">
-      <Brain className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
-      <span className="text-sm text-foreground/80">
-        Memory updated in{" "}
-        <span className="font-mono text-xs text-primary">{displayPath}</span>
-      </span>
     </div>
   );
 }
